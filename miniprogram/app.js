@@ -2,98 +2,57 @@
 App({
   globalData: {
     userInfo: null,
-    token: null,
-    baseUrl: 'http://localhost:3000/api', // 开发环境API地址
-    isLogin: false,
-    currentRole: 'user', // user | electrician
-    systemInfo: null,
-    location: null
+    token: '',
+    role: 'user', // 默认角色：普通用户
+    apiBaseUrl: 'https://api.electrician-platform.com/api/v1',
+    socketUrl: 'wss://socket.electrician-platform.com',
+    version: '1.0.0',
+    location: null,
+    systemInfo: null
   },
-
-  onLaunch() {
-    console.log('小程序启动');
-    
+  
+  onLaunch: function() {
     // 获取系统信息
     this.getSystemInfo();
     
     // 检查登录状态
     this.checkLoginStatus();
     
-    // 获取位置权限
-    this.getLocationPermission();
+    // 获取位置信息
+    this.getLocation();
   },
-
-  onShow() {
-    console.log('小程序显示');
-  },
-
-  onHide() {
-    console.log('小程序隐藏');
-  },
-
+  
   // 获取系统信息
-  getSystemInfo() {
-    wx.getSystemInfo({
-      success: (res) => {
-        this.globalData.systemInfo = res;
-      }
-    });
-  },
-
-  // 检查登录状态
-  checkLoginStatus() {
-    const token = wx.getStorageSync('token');
-    if (token) {
-      this.globalData.token = token;
-      this.globalData.isLogin = true;
-      
-      // 获取用户信息
-      this.getUserInfo();
-      
-      // 获取当前角色
-      const currentRole = wx.getStorageSync('currentRole');
-      if (currentRole) {
-        this.globalData.currentRole = currentRole;
-      }
+  getSystemInfo: function() {
+    try {
+      const systemInfo = wx.getSystemInfoSync();
+      this.globalData.systemInfo = systemInfo;
+      console.log('系统信息:', systemInfo);
+    } catch (e) {
+      console.error('获取系统信息失败:', e);
     }
   },
-
-  // 获取用户信息
-  getUserInfo() {
-    wx.request({
-      url: `${this.globalData.baseUrl}/auth/userinfo`,
-      method: 'GET',
-      header: {
-        'Authorization': `Bearer ${this.globalData.token}`
-      },
-      success: (res) => {
-        if (res.data.code === 0) {
-          this.globalData.userInfo = res.data.data;
-        }
+  
+  // 检查登录状态
+  checkLoginStatus: function() {
+    const token = wx.getStorageSync('token');
+    const userInfo = wx.getStorageSync('userInfo');
+    const role = wx.getStorageSync('role');
+    
+    if (token && userInfo) {
+      this.globalData.token = token;
+      this.globalData.userInfo = userInfo;
+      if (role) {
+        this.globalData.role = role;
       }
-    });
+      console.log('用户已登录:', userInfo);
+    } else {
+      console.log('用户未登录');
+    }
   },
-
-  // 获取位置权限
-  getLocationPermission() {
-    wx.getSetting({
-      success: (res) => {
-        if (!res.authSetting['scope.userLocation']) {
-          wx.authorize({
-            scope: 'scope.userLocation',
-            success: () => {
-              this.getLocation();
-            }
-          });
-        } else {
-          this.getLocation();
-        }
-      }
-    });
-  },
-
-  // 获取位置
-  getLocation() {
+  
+  // 获取位置信息
+  getLocation: function() {
     wx.getLocation({
       type: 'gcj02',
       success: (res) => {
@@ -101,73 +60,63 @@ App({
           latitude: res.latitude,
           longitude: res.longitude
         };
-      }
-    });
-  },
-
-  // 登录方法
-  login(phone, code, callback) {
-    wx.request({
-      url: `${this.globalData.baseUrl}/auth/login`,
-      method: 'POST',
-      data: {
-        phone,
-        code
-      },
-      success: (res) => {
-        if (res.data.code === 0) {
-          const { token, userInfo } = res.data.data;
-          
-          // 保存登录状态
-          this.globalData.token = token;
-          this.globalData.userInfo = userInfo;
-          this.globalData.isLogin = true;
-          
-          // 保存到本地存储
-          wx.setStorageSync('token', token);
-          
-          if (callback && typeof callback === 'function') {
-            callback(true);
-          }
-        } else {
-          if (callback && typeof callback === 'function') {
-            callback(false, res.data.message);
-          }
-        }
+        console.log('位置信息:', this.globalData.location);
       },
       fail: (err) => {
-        if (callback && typeof callback === 'function') {
-          callback(false, '网络请求失败');
-        }
+        console.error('获取位置失败:', err);
       }
     });
   },
-
-  // 退出登录
-  logout() {
-    // 清除本地存储
-    wx.removeStorageSync('token');
-    wx.removeStorageSync('currentRole');
+  
+  // 登录方法
+  login: function(userInfo, callback) {
+    // 保存用户信息
+    this.globalData.userInfo = userInfo;
+    wx.setStorageSync('userInfo', userInfo);
     
-    // 重置全局数据
-    this.globalData.token = null;
-    this.globalData.userInfo = null;
-    this.globalData.isLogin = false;
-    this.globalData.currentRole = 'user';
-    
-    // 跳转到登录页
-    wx.reLaunch({
-      url: '/pages/login/login'
-    });
-  },
-
-  // 切换角色
-  switchRole(role) {
-    if (role !== 'user' && role !== 'electrician') {
-      return;
+    // 保存token
+    if (userInfo.token) {
+      this.globalData.token = userInfo.token;
+      wx.setStorageSync('token', userInfo.token);
     }
     
-    this.globalData.currentRole = role;
-    wx.setStorageSync('currentRole', role);
+    // 保存角色
+    if (userInfo.role) {
+      this.globalData.role = userInfo.role;
+      wx.setStorageSync('role', userInfo.role);
+    }
+    
+    if (callback && typeof callback === 'function') {
+      callback(userInfo);
+    }
+  },
+  
+  // 退出登录
+  logout: function(callback) {
+    // 清除本地存储
+    wx.removeStorageSync('token');
+    wx.removeStorageSync('userInfo');
+    wx.removeStorageSync('role');
+    
+    // 重置全局数据
+    this.globalData.userInfo = null;
+    this.globalData.token = '';
+    this.globalData.role = 'user';
+    
+    if (callback && typeof callback === 'function') {
+      callback();
+    }
+  },
+  
+  // 切换角色
+  switchRole: function(role, callback) {
+    if (role === 'user' || role === 'electrician') {
+      this.globalData.role = role;
+      wx.setStorageSync('role', role);
+      
+      if (callback && typeof callback === 'function') {
+        callback(role);
+      }
+    }
   }
 });

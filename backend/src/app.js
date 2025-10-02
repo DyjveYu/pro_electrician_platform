@@ -1,62 +1,55 @@
 const express = require('express');
 const cors = require('cors');
-const helmet = require('helmet');
 const morgan = require('morgan');
+const helmet = require('helmet');
+const compression = require('compression');
 const path = require('path');
-require('dotenv').config();
+const { errorHandler } = require('./middleware/errorHandler');
 
-// 导入中间件
-const errorHandler = require('./middleware/errorHandler');
-const responseFormatter = require('./middleware/responseFormatter');
-const rateLimiter = require('./middleware/rateLimiter');
+// 导入路由
+const electricianRoutes = require('./routes/electricianRoutes');
 
-// 路由导入
-const authRoutes = require('./routes/auth');
-const orderRoutes = require('./routes/orders');
-const paymentRoutes = require('./routes/payments');
-// const reviewRoutes = require('./routes/reviews');
-// const addressRoutes = require('./routes/addresses');
-// const messageRoutes = require('./routes/messages');
-const adminRoutes = require('./routes/admin');
-// const uploadRoutes = require('./routes/upload');
-const systemRoutes = require('./routes/system');
-
+// 初始化Express应用
 const app = express();
-const PORT = process.env.PORT || 3000;
 
 // 基础中间件
-app.use(helmet()); // 安全头
-app.use(cors()); // 跨域
-app.use(morgan('combined')); // 日志
-app.use(express.json({ limit: '10mb' })); // JSON解析
-app.use(express.urlencoded({ extended: true, limit: '10mb' })); // URL编码解析
+app.use(helmet()); // 安全HTTP头
+app.use(compression()); // 压缩响应
+app.use(morgan('dev')); // 日志
+app.use(cors()); // 跨域支持
+app.use(express.json()); // JSON解析
+app.use(express.urlencoded({ extended: true })); // URL编码解析
 
 // 静态文件服务
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
-// 响应格式化中间件
-app.use(responseFormatter);
-
-// 限流中间件
-app.use(rateLimiter());
-
 // API路由
-app.use('/api/auth', authRoutes);
-app.use('/api/orders', orderRoutes);
-app.use('/api/payments', paymentRoutes);
-// app.use('/api/v1/reviews', reviewRoutes);
-// app.use('/api/v1/addresses', addressRoutes);
-// app.use('/api/v1/messages', messageRoutes);
-app.use('/api/admin', adminRoutes);
-// app.use('/api/upload', uploadRoutes);
-app.use('/api/system', systemRoutes);
+app.use('/api/v1/electricians', electricianRoutes);
+
+// 健康检查端点
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', message: '服务运行正常' });
+});
+
+// API文档路由
+app.get('/api-docs', (req, res) => {
+  res.status(200).json({
+    message: 'API文档',
+    version: '1.0.0',
+    endpoints: [
+      { path: '/api/v1/electricians', methods: ['GET', 'POST'], description: '电工相关操作' },
+      { path: '/api/v1/electricians/:id', methods: ['GET', 'PUT', 'DELETE'], description: '特定电工操作' },
+      { path: '/api/v1/electricians/certification', methods: ['POST'], description: '电工认证申请' }
+    ]
+  });
+});
+
+// 404处理
+app.use((req, res, next) => {
+  res.status(404).json({ message: '请求的资源不存在' });
+});
 
 // 错误处理中间件
 app.use(errorHandler);
-
-// 启动服务器
-app.listen(PORT, () => {
-  console.log(`服务器运行在端口 ${PORT}`);
-});
 
 module.exports = app;
