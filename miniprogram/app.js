@@ -3,171 +3,108 @@ App({
   globalData: {
     userInfo: null,
     token: null,
-    baseUrl: 'http://localhost:3000/api', // 开发环境API地址
-    isLogin: false,
-    currentRole: 'user', // user | electrician
-    systemInfo: null,
-    location: null
+    apiBaseUrl: 'http://localhost:3000/api',
+    role: 'user', // 默认角色：user 或 electrician
+    isElectricianCertified: false,
+    certificationStatus: null,
+    location: null,
+    socketConnected: false
   },
-
-  onLaunch() {
-    console.log('小程序启动');
-    
-    // 获取系统信息
-    this.getSystemInfo();
-    
-    // 检查登录状态
-    this.checkLoginStatus();
-    
-    // 获取位置权限
-    this.getLocationPermission();
-  },
-
-  onShow() {
-    console.log('小程序显示');
-  },
-
-  onHide() {
-    console.log('小程序隐藏');
-  },
-
-  // 获取系统信息
-  getSystemInfo() {
-    wx.getSystemInfo({
-      success: (res) => {
-        this.globalData.systemInfo = res;
-      }
-    });
-  },
-
-  // 检查登录状态
-  checkLoginStatus() {
+  
+  onLaunch: function() {
+    // 获取本地存储的用户信息和token
     const token = wx.getStorageSync('token');
+    const userInfo = wx.getStorageSync('userInfo');
+    const role = wx.getStorageSync('role') || 'user';
+    
     if (token) {
       this.globalData.token = token;
-      this.globalData.isLogin = true;
+      this.globalData.userInfo = userInfo;
+      this.globalData.role = role;
       
-      // 获取用户信息
-      this.getUserInfo();
-      
-      // 获取当前角色
-      const currentRole = wx.getStorageSync('currentRole');
-      if (currentRole) {
-        this.globalData.currentRole = currentRole;
+      // 如果是电工角色，检查认证状态
+      if (role === 'electrician') {
+        this.checkElectricianStatus();
       }
     }
+    
+    // 获取位置信息
+    this.getLocation();
   },
-
-  // 获取用户信息
-  getUserInfo() {
+  
+  // 检查电工认证状态
+  checkElectricianStatus: function() {
+    const that = this;
     wx.request({
-      url: `${this.globalData.baseUrl}/auth/userinfo`,
+      url: `${that.globalData.apiBaseUrl}/electrician/certification-status`,
       method: 'GET',
       header: {
-        'Authorization': `Bearer ${this.globalData.token}`
+        'Authorization': `Bearer ${that.globalData.token}`
       },
-      success: (res) => {
-        if (res.data.code === 0) {
-          this.globalData.userInfo = res.data.data;
+      success: function(res) {
+        if (res.data.success && res.data.data) {
+          that.globalData.certificationStatus = res.data.data.status;
+          that.globalData.isElectricianCertified = res.data.data.status === 'approved';
         }
       }
     });
   },
-
-  // 获取位置权限
-  getLocationPermission() {
-    wx.getSetting({
-      success: (res) => {
-        if (!res.authSetting['scope.userLocation']) {
-          wx.authorize({
-            scope: 'scope.userLocation',
-            success: () => {
-              this.getLocation();
-            }
-          });
-        } else {
-          this.getLocation();
-        }
-      }
-    });
-  },
-
-  // 获取位置
-  getLocation() {
+  
+  // 获取位置信息
+  getLocation: function() {
+    const that = this;
     wx.getLocation({
       type: 'gcj02',
-      success: (res) => {
-        this.globalData.location = {
+      success: function(res) {
+        that.globalData.location = {
           latitude: res.latitude,
           longitude: res.longitude
         };
+      },
+      fail: function() {
+        wx.showToast({
+          title: '获取位置信息失败',
+          icon: 'none'
+        });
       }
     });
   },
-
-  // 登录方法
-  login(phone, code, callback) {
-    wx.request({
-      url: `${this.globalData.baseUrl}/auth/login`,
-      method: 'POST',
-      data: {
-        phone,
-        code
-      },
-      success: (res) => {
-        if (res.data.code === 0) {
-          const { token, userInfo } = res.data.data;
-          
-          // 保存登录状态
-          this.globalData.token = token;
-          this.globalData.userInfo = userInfo;
-          this.globalData.isLogin = true;
-          
-          // 保存到本地存储
-          wx.setStorageSync('token', token);
-          
-          if (callback && typeof callback === 'function') {
-            callback(true);
-          }
-        } else {
-          if (callback && typeof callback === 'function') {
-            callback(false, res.data.message);
-          }
-        }
-      },
-      fail: (err) => {
-        if (callback && typeof callback === 'function') {
-          callback(false, '网络请求失败');
-        }
-      }
-    });
-  },
-
-  // 退出登录
-  logout() {
-    // 清除本地存储
-    wx.removeStorageSync('token');
-    wx.removeStorageSync('currentRole');
+  
+  // 切换角色
+  switchRole: function(role) {
+    this.globalData.role = role;
+    wx.setStorageSync('role', role);
     
-    // 重置全局数据
-    this.globalData.token = null;
+    // 如果切换到电工角色，检查认证状态
+    if (role === 'electrician') {
+      this.checkElectricianStatus();
+    }
+    
+    // 发布角色切换事件
+    wx.getSystemInfo({
+      success: function(res) {
+        if (res.platform === 'devtools') {
+          console.log('角色已切换为:', role);
+        }
+      }
+    });
+  },
+  
+  // 登出
+  logout: function() {
     this.globalData.userInfo = null;
-    this.globalData.isLogin = false;
-    this.globalData.currentRole = 'user';
+    this.globalData.token = null;
+    this.globalData.role = 'user';
+    this.globalData.isElectricianCertified = false;
+    this.globalData.certificationStatus = null;
+    
+    wx.removeStorageSync('token');
+    wx.removeStorageSync('userInfo');
+    wx.removeStorageSync('role');
     
     // 跳转到登录页
     wx.reLaunch({
       url: '/pages/login/login'
     });
-  },
-
-  // 切换角色
-  switchRole(role) {
-    if (role !== 'user' && role !== 'electrician') {
-      return;
-    }
-    
-    this.globalData.currentRole = role;
-    wx.setStorageSync('currentRole', role);
   }
 });
