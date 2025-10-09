@@ -169,12 +169,12 @@ class AuthController {
         return res.error('没有要更新的信息', 400);
       }
 
-      const success = await User.update(userId, updateData);
+      const result = await User.update(userId, updateData);
       
-      if (success) {
-        res.success({ message: '用户信息更新成功' });
+      if (result.success) {
+        res.success({ message: result.message || '用户信息更新成功' });
       } else {
-        res.error('用户信息更新失败', 500);
+        res.error(result.message || '用户信息更新失败', 500);
       }
     } catch (error) {
       next(error);

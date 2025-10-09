@@ -15,11 +15,13 @@ const authRoutes = require('./routes/auth');
 const orderRoutes = require('./routes/orders');
 const paymentRoutes = require('./routes/payments');
 // const reviewRoutes = require('./routes/reviews');
-// const addressRoutes = require('./routes/addresses');
-// const messageRoutes = require('./routes/messages');
+const addressRoutes = require('./routes/addresses');
+const messageRoutes = require('./routes/messages');
 const adminRoutes = require('./routes/admin');
 // const uploadRoutes = require('./routes/upload');
 const systemRoutes = require('./routes/system');
+const userRoutes = require('./routes/users');
+const electricianRoutes = require('./routes/electricians');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -41,15 +43,17 @@ app.use(responseFormatter);
 app.use(rateLimiter());
 
 // API路由
-// app.use('/api/auth', authRoutes);
-// app.use('/api/orders', orderRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/orders', orderRoutes);
 // app.use('/api/payments', paymentRoutes);
 // app.use('/api/v1/reviews', reviewRoutes);
-// app.use('/api/v1/addresses', addressRoutes);
-// app.use('/api/v1/messages', messageRoutes);
+app.use('/api/addresses', addressRoutes);
+app.use('/api/messages', messageRoutes);
 app.use('/api/admin', adminRoutes);
 // app.use('/api/v1/upload', uploadRoutes);
-// app.use('/api/system', systemRoutes);
+app.use('/api/system', systemRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/electricians', electricianRoutes);
 
 // 健康检查
 app.get('/health', (req, res) => {
@@ -74,5 +78,7 @@ app.listen(PORT, () => {
   console.log(`📖 API文档: http://localhost:${PORT}/api/v1`);
   console.log(`🏥 健康检查: http://localhost:${PORT}/health`);
 });
+
+// 消息中心功能已添加
 
 module.exports = app;

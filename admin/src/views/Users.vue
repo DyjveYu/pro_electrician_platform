@@ -253,7 +253,7 @@ const loadUserList = async () => {
     
     const response = await getUserList(params)
     if (response.code === 200) {
-      userList.value = response.data.list
+      userList.value = response.data.users || response.data.list || []
       pagination.total = response.data.total
     }
   } catch (error) {

@@ -7,23 +7,23 @@ const Joi = require('joi');
 /**
  * 验证请求参数
  * @param {Object} schema - Joi验证模式
- * @param {string} property - 验证的属性 (body, query, params)
+ * @returns {Function} Express中间件函数
  */
-const validate = (schema, property = 'body') => {
+const validate = (schema) => {
   return (req, res, next) => {
-    const { error, value } = schema.validate(req[property], {
-      abortEarly: false, // 显示所有错误
-      allowUnknown: false, // 不允许未知字段
-      stripUnknown: true // 移除未知字段
+    const { error, value } = schema.validate(req.body, {
+      abortEarly: false, // 返回所有错误
+      stripUnknown: true, // 移除未定义字段
+      convert: true      // 自动类型转换
     });
 
     if (error) {
-      const errorMessage = error.details.map(detail => detail.message).join(', ');
-      return res.error(errorMessage, 422);
+      const messages = error.details.map(d => d.message).join('; ');
+      return res.error(messages, 422);
     }
 
-    // 将验证后的值替换原始值
-    req[property] = value;
+    // 将验证后的值赋值给req.body
+    req.body = value;
     next();
   };
 };
@@ -31,42 +31,34 @@ const validate = (schema, property = 'body') => {
 // 常用验证模式
 const schemas = {
   // 发送验证码
-  sendCode: {
-    body: Joi.object({
-      phone: Joi.string().pattern(/^1[3-9]\d{9}$/).required().messages({
-        'string.pattern.base': '手机号格式不正确'
-      }),
-      type: Joi.string().valid('login', 'register', 'reset_password').default('login')
-    })
-  },
+  sendCode: Joi.object({
+    phone: Joi.string().pattern(/^1[3-9]\d{9}$/).required().messages({
+      'string.pattern.base': '手机号格式不正确'
+    }),
+    type: Joi.string().valid('login', 'register', 'reset_password').default('login')
+  }),
 
   // 用户登录
-  login: {
-    body: Joi.object({
-      phone: Joi.string().pattern(/^1[3-9]\d{9}$/).required().messages({
-        'string.pattern.base': '手机号格式不正确'
-      }),
-      code: Joi.string().length(6).pattern(/^\d{6}$/).required().messages({
-        'string.length': '验证码必须是6位数字',
-        'string.pattern.base': '验证码必须是6位数字'
-      })
+  login: Joi.object({
+    phone: Joi.string().pattern(/^1[3-9]\d{9}$/).required().messages({
+      'string.pattern.base': '手机号格式不正确'
+    }),
+    code: Joi.string().length(6).pattern(/^\d{6}$/).required().messages({
+      'string.length': '验证码必须是6位数字',
+      'string.pattern.base': '验证码必须是6位数字'
     })
-  },
+  }),
 
   // 更新用户信息
-  updateProfile: {
-    body: Joi.object({
-      nickname: Joi.string().min(1).max(50).optional(),
-      avatar: Joi.string().uri().optional().allow('')
-    }).min(1)
-  },
+  updateProfile: Joi.object({
+    nickname: Joi.string().min(1).max(50).optional(),
+    avatar: Joi.string().uri().optional().allow('')
+  }).min(1),
 
   // 切换角色
-  switchRole: {
-    body: Joi.object({
-      role: Joi.string().valid('user', 'electrician').required()
-    })
-  },
+  switchRole: Joi.object({
+    role: Joi.string().valid('user', 'electrician').required()
+  }),
 
   // 创建工单
   createOrder: {

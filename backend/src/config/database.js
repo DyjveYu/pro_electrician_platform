@@ -1,16 +1,3 @@
-
-/**
- * ⚠️ 此文件已废弃
- * 2025年10月9日 起
- * 请使用 src/config/database.js 或 src/config/sequelize.js
- * 
- * 迁移说明：
- * - 原有 pool 配置已移至 src/config/database.js
- * - 新代码请使用 Sequelize: src/config/sequelize.js
- * 
- * 此文件保留用于兼容性，将在下个版本删除
- */
-
 /**
  * 数据库连接配置
  */
@@ -95,5 +82,11 @@ const closePool = async () => {
   console.log('数据库连接池已关闭');
 };
 
-// 重定向到新位置
-module.exports = require('../src/config/database');
+module.exports = {
+  pool,
+  query,
+  transaction,
+  getConnection,
+  testConnection,
+  closePool
+};

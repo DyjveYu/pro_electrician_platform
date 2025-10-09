@@ -22,14 +22,14 @@ router.post('/',
 // 获取工单列表
 router.get('/',
   authenticateToken,
-  validate(schemas.getOrderList),
+  validate(schemas.getOrderList, 'query'),
   OrderController.getOrderList
 );
 
 // 获取工单详情
 router.get('/:id',
   authenticateToken,
-  validate(schemas.getOrderDetail),
+  validate(schemas.getOrderDetail, 'params'),
   OrderController.getOrderDetail
 );
 
@@ -38,7 +38,7 @@ router.post('/:id/take',
   rateLimiter('take_order', 10, 60),
   authenticateToken,
   requireRole('electrician'),
-  validate(schemas.takeOrder),
+  validate(schemas.takeOrder, 'body'),
   OrderController.takeOrder
 );
 
@@ -46,7 +46,7 @@ router.post('/:id/take',
 router.post('/:id/confirm',
   authenticateToken,
   requireRole('user'),
-  validate(schemas.confirmOrder),
+  validate(schemas.confirmOrder, 'params'),
   OrderController.confirmOrder
 );
 
@@ -54,7 +54,7 @@ router.post('/:id/confirm',
 router.post('/:id/start',
   authenticateToken,
   requireRole('electrician'),
-  validate(schemas.startService),
+  validate(schemas.startService, 'params'),
   OrderController.startService
 );
 
@@ -62,7 +62,7 @@ router.post('/:id/start',
 router.post('/:id/complete',
   authenticateToken,
   requireRole('electrician'),
-  validate(schemas.completeService),
+  validate(schemas.completeService, 'body'),
   OrderController.completeService
 );
 
@@ -70,7 +70,7 @@ router.post('/:id/complete',
 router.post('/:id/cancel',
   authenticateToken,
   requireRole('user'),
-  validate(schemas.cancelOrder),
+  validate(schemas.cancelOrder, 'body'),
   OrderController.cancelOrder
 );
 
@@ -84,6 +84,8 @@ router.get('/stats/summary',
 router.put('/:id/status',
   authenticateToken,
   // requireRole('admin'), // 暂时注释，后续添加管理员认证
-  validate(schemas.updateOrderStatus),
+  validate(schemas.updateOrderStatus, 'body'),
   OrderController.updateOrderStatus
 );
+
+module.exports = router;

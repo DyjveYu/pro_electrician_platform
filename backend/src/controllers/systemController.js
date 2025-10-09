@@ -115,8 +115,8 @@ class SystemController {
         `SELECT 
           (SELECT COUNT(*) FROM users WHERE status = 'active') as total_users,
           (SELECT COUNT(*) FROM users WHERE current_role = 'electrician' AND status = 'active') as total_electricians,
-          (SELECT COUNT(*) FROM work_orders) as total_orders,
-          (SELECT COUNT(*) FROM work_orders WHERE status = 'completed') as completed_orders
+          (SELECT COUNT(*) FROM orders) as total_orders,
+          (SELECT COUNT(*) FROM orders WHERE status = 'completed') as completed_orders
         `
       );
       
@@ -183,11 +183,11 @@ class SystemController {
           ec.certificate_number, ec.experience_years,
           (
             SELECT AVG(rating) FROM reviews r 
-            JOIN work_orders wo ON r.order_id = wo.id 
+            JOIN orders wo ON r.order_id = wo.id 
             WHERE wo.electrician_id = u.id
           ) as avg_rating,
           (
-            SELECT COUNT(*) FROM work_orders wo 
+            SELECT COUNT(*) FROM orders wo 
             WHERE wo.electrician_id = u.id AND wo.status = 'completed'
           ) as completed_orders
          FROM users u
@@ -231,7 +231,7 @@ class SystemController {
       if (type === 'all' || type === 'orders') {
         const [orderRows] = await db.query(
           `SELECT wo.*, st.name as service_type_name, u.nickname as user_nickname
-           FROM work_orders wo
+           FROM orders wo
            LEFT JOIN service_types st ON wo.service_type_id = st.id
            LEFT JOIN users u ON wo.user_id = u.id
            WHERE (wo.title LIKE ? OR wo.description LIKE ? OR wo.order_no LIKE ?)
@@ -293,15 +293,24 @@ class SystemController {
           (SELECT COUNT(*) FROM users WHERE status = 'active') as total_users,
           (SELECT COUNT(*) FROM users WHERE current_role = 'user' AND status = 'active') as total_customers,
           (SELECT COUNT(*) FROM users WHERE current_role = 'electrician' AND status = 'active') as total_electricians,
-          (SELECT COUNT(*) FROM work_orders) as total_orders,
-          (SELECT COUNT(*) FROM work_orders WHERE status = 'pending') as pending_orders,
-          (SELECT COUNT(*) FROM work_orders WHERE status = 'completed') as completed_orders,
-          (SELECT COALESCE(SUM(total_amount), 0) FROM work_orders WHERE status = 'completed') as total_revenue,
+          (SELECT COUNT(*) FROM orders) as total_orders,
+          (SELECT COUNT(*) FROM orders WHERE status = 'pending') as pending_orders,
+          (SELECT COUNT(*) FROM orders WHERE status = 'completed') as completed_orders,
+          (SELECT COALESCE(SUM(final_amount), 0) FROM orders WHERE status = 'completed') as total_revenue,
           (SELECT COUNT(*) FROM payments WHERE status = 'paid') as total_payments
         `
       );
       
-      const stats = rows[0];
+      const stats = rows[0] || {
+        total_users: 0,
+        total_customers: 0,
+        total_electricians: 0,
+        total_orders: 0,
+        pending_orders: 0,
+        completed_orders: 0,
+        total_revenue: 0,
+        total_payments: 0
+      };
       
       // 计算完成率
       stats.completion_rate = stats.total_orders > 0 

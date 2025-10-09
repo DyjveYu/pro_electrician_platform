@@ -19,6 +19,20 @@ module.exports = (err, req, res, next) => {
     return res.error('token已过期', 401);
   }
 
+  // Sequelize错误
+  if (err.name === 'SequelizeUniqueConstraintError') {
+    return res.error('数据已存在', 409);
+  }
+  
+  if (err.name === 'SequelizeForeignKeyConstraintError') {
+    return res.error('关联数据不存在', 400);
+  }
+  
+  if (err.name === 'SequelizeValidationError') {
+    const msg = err.errors.map(e => e.message).join('; ');
+    return res.error(msg, 422);
+  }
+
   // MySQL错误
   if (err.code === 'ER_DUP_ENTRY') {
     return res.error('数据已存在', 409);
@@ -41,7 +55,12 @@ module.exports = (err, req, res, next) => {
     return res.error('不支持的文件类型', 400);
   }
 
-  // 自定义业务错误
+  // 自定义业务错误 (AppError)
+  if (err.isOperational) {
+    return res.error(err.message, err.statusCode, err.data);
+  }
+
+  // 原有的自定义业务错误处理（保留向后兼容性）
   if (err.status) {
     return res.error(err.message, err.status);
   }

@@ -25,7 +25,7 @@ router.post('/login',
 );
 
 // 获取用户信息
-router.get('/user-info',
+router.get('/userinfo',
   authenticateToken,
   AuthController.getUserInfo
 );

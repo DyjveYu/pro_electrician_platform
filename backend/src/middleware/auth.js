@@ -18,17 +18,23 @@ const authenticateToken = async (req, res, next) => {
       return res.error('未提供访问令牌', 401);
     }
 
-    // 检查token是否在黑名单中
-    const isBlacklisted = await redis.get(`blacklist:${token}`);
-    if (isBlacklisted) {
-      return res.status(401).json({
-        success: false,
-        message: 'Token已失效，请重新登录'
-      });
+    // 检查token是否在黑名单中（如果Redis连接失败则跳过）
+    try {
+      const isBlacklisted = await redis.get(`blacklist:${token}`);
+      if (isBlacklisted) {
+        return res.status(401).json({
+          success: false,
+          message: 'Token已失效，请重新登录'
+        });
+      }
+    } catch (redisError) {
+      console.warn('Redis连接失败，跳过黑名单检查:', redisError.message);
     }
     
     // 验证token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log('JWT decoded payload:', JSON.stringify(decoded, null, 2));
+    console.log('decoded.id:', decoded.id, 'typeof:', typeof decoded.id);
     
     // 获取用户信息
     const user = await User.findById(decoded.id);
@@ -105,7 +111,7 @@ const optionalAuth = async (req, res, next) => {
 
     if (token) {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await getUserById(decoded.userId);
+      const user = await User.findById(decoded.id);
       if (user && user.status === 'active') {
         req.user = user;
       }

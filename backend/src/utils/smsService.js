@@ -3,7 +3,8 @@
  * 处理短信验证码发送和验证
  */
 
-const redis = require('../../config/redis');
+// 内存存储（开发环境使用）
+const memoryStore = new Map();
 
 class SmsService {
   /**
@@ -13,10 +14,10 @@ class SmsService {
     try {
       // 检查发送频率限制（60秒内只能发送一次）
       const lastSendKey = `sms:last_send:${phone}`;
-      const lastSendTime = await redis.get(lastSendKey);
+      const lastSendData = memoryStore.get(lastSendKey);
       
-      if (lastSendTime) {
-        const timeDiff = Date.now() - parseInt(lastSendTime);
+      if (lastSendData && lastSendData.expiry > Date.now()) {
+        const timeDiff = Date.now() - lastSendData.timestamp;
         if (timeDiff < 60000) { // 60秒
           const remainingTime = Math.ceil((60000 - timeDiff) / 1000);
           throw new Error(`请等待${remainingTime}秒后再试`);
@@ -30,12 +31,18 @@ class SmsService {
       const isTestEnv = process.env.NODE_ENV !== 'production';
       const finalCode = isTestEnv ? '123456' : code;
       
-      // 存储验证码到Redis（5分钟有效期）
+      // 存储验证码到内存（5分钟有效期）
       const codeKey = `sms:code:${phone}:${type}`;
-      await redis.setex(codeKey, 300, finalCode); // 5分钟过期
+      memoryStore.set(codeKey, {
+        code: finalCode,
+        expiry: Date.now() + 300000 // 5分钟过期
+      });
       
       // 记录发送时间
-      await redis.setex(lastSendKey, 60, Date.now().toString()); // 1分钟过期
+      memoryStore.set(lastSendKey, {
+        timestamp: Date.now(),
+        expiry: Date.now() + 60000 // 1分钟过期
+      });
       
       if (isTestEnv) {
         console.log(`📱 测试环境短信验证码: ${phone} -> ${finalCode}`);
@@ -70,16 +77,16 @@ class SmsService {
   static async verifyCode(phone, code, type = 'login') {
     try {
       const codeKey = `sms:code:${phone}:${type}`;
-      const storedCode = await redis.get(codeKey);
+      const storedData = memoryStore.get(codeKey);
       
-      if (!storedCode) {
+      if (!storedData || storedData.expiry < Date.now()) {
         return {
           success: false,
           message: '验证码已过期或不存在'
         };
       }
       
-      if (storedCode !== code) {
+      if (storedData.code !== code) {
         return {
           success: false,
           message: '验证码错误'
@@ -87,7 +94,7 @@ class SmsService {
       }
       
       // 验证成功后删除验证码
-      await redis.del(codeKey);
+      memoryStore.delete(codeKey);
       
       return {
         success: true,
