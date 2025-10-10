@@ -6,21 +6,24 @@
 const express = require('express');
 const router = express.Router();
 const AuthController = require('../controllers/authController');
-const { validate, schemas } = require('../middleware/validation');
+// 错误导入：const { validate } = require('../middleware/validation');
+const validate = require('../middleware/validation');
+const userSchemas = require('../schemas/userSchemas');
 const { authenticateToken, optionalAuth } = require('../middleware/auth');
 const rateLimiter = require('../middleware/rateLimiter');
 
 // 发送验证码 - 限流：每分钟最多5次
-router.post('/send-code', 
+router.post(
+  '/send-code',
   rateLimiter(),
-  validate(schemas.sendCode),
+  validate(userSchemas.sendCode),
   AuthController.sendCode
 );
 
 // 用户登录/注册 - 限流：每分钟最多10次
 router.post('/login',
   rateLimiter(),
-  validate(schemas.login),
+  validate(userSchemas.login),
   AuthController.login
 );
 
@@ -33,14 +36,14 @@ router.get('/userinfo',
 // 更新用户信息
 router.put('/profile',
   authenticateToken,
-  validate(schemas.updateProfile),
+  validate(userSchemas.updateProfile),
   AuthController.updateProfile
 );
 
 // 切换用户角色
 router.post('/switch-role',
   authenticateToken,
-  validate(schemas.switchRole),
+  validate(userSchemas.switchRole),
   AuthController.switchRole
 );
 

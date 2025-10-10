@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const MessageController = require('../controllers/messageController');
 const { authenticateToken } = require('../middleware/auth');
-const { validate } = require('../middleware/validation');
+const validate = require('../middleware/validation');
 const schemas = require('../schemas/messageSchemas');
 
 // 获取用户消息列表

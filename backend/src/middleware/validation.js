@@ -4,17 +4,26 @@
 
 const Joi = require('joi');
 
+
 /**
  * 验证请求参数
- * @param {Object} schema - Joi验证模式
+ * @param {Object} schema - Joi验证模式或包含Joi验证模式的对象
  * @returns {Function} Express中间件函数
  */
 const validate = (schema) => {
   return (req, res, next) => {
-    const { error, value } = schema.validate(req.body, {
+    // 检查schema是否为对象，如果是对象且有body属性，则使用schema.body
+    const schemaToValidate = schema.body ? schema.body : schema;
+    
+    // 添加类型检查，确保schemaToValidate是有效的Joi对象
+    if (!schemaToValidate || typeof schemaToValidate.validate !== 'function') {
+      return res.error('无效的验证模式：不是有效的Joi对象', 500);
+    }
+    
+    const { error, value } = schemaToValidate.validate(req.body, {
       abortEarly: false, // 返回所有错误
       stripUnknown: true, // 移除未定义字段
-      convert: true      // 自动类型转换
+      convert: true      // 自动类型转换 
     });
 
     if (error) {
@@ -300,7 +309,5 @@ const schemas = {
   })
 };
 
-module.exports = {
-  validate,
-  schemas
-};
+module.exports = validate;
+module.exports.schemas = schemas;

@@ -6,7 +6,8 @@
 const express = require('express');
 const router = express.Router();
 const OrderController = require('../controllers/orderController');
-const { validate, schemas } = require('../middleware/validation');
+const validate = require('../middleware/validation');
+const schemas = validate.schemas;
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const rateLimiter = require('../middleware/rateLimiter');
 

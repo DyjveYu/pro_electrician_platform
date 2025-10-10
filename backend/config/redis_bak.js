@@ -1,5 +1,16 @@
+
+/**
+ * ⚠️ 此文件已废弃
+ * 2025年10月9日 起
+ * 请使用 src/config/redis.js 
+ * 
+ * 
+ * 此文件保留用于兼容性，将在下个版本删除
+ */
+
 /**
  * Redis连接配置
+ * 封装Redis常用操作方法
  */
 
 const redis = require('redis');
@@ -46,7 +57,9 @@ client.on('end', () => {
 // 连接Redis
 const connectRedis = async () => {
   try {
-    await client.connect();
+    if (!client.isOpen) {
+      await client.connect();
+    }
     return true;
   } catch (error) {
     console.error('❌ Redis连接失败:', error.message);
@@ -56,9 +69,26 @@ const connectRedis = async () => {
 
 // Redis操作封装
 const redisOperations = {
+  // 确保Redis客户端已连接
+  ensureConnection: async () => {
+    try {
+      if (!client.isOpen) {
+        await client.connect();
+        console.log('Redis客户端已重新连接');
+      }
+      return true;
+    } catch (error) {
+      console.error('Redis连接失败:', error);
+      return false;
+    }
+  },
+
   // 设置键值对
   set: async (key, value, expireTime = null) => {
     try {
+      // 确保连接已建立
+      await redisOperations.ensureConnection();
+      
       if (typeof value === 'object') {
         value = JSON.stringify(value);
       }
@@ -78,6 +108,9 @@ const redisOperations = {
   // 获取值
   get: async (key) => {
     try {
+      // 确保连接已建立
+      await redisOperations.ensureConnection();
+      
       const value = await client.get(key);
       if (!value) return null;
       
@@ -96,6 +129,9 @@ const redisOperations = {
   // 删除键
   del: async (key) => {
     try {
+      // 确保连接已建立
+      await redisOperations.ensureConnection();
+      
       await client.del(key);
       return true;
     } catch (error) {
@@ -211,5 +247,5 @@ module.exports = {
   client,
   connectRedis,
   closeRedis,
-  ...redisOperations
+  redisOperations
 };

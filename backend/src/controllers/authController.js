@@ -3,9 +3,11 @@
  * 处理用户登录、注册、角色切换等功能
  */
 
-const User = require('../models/User');
+//const User = require('../models/User'); 老的导入方式
+const { User, ElectricianCertification, Order } = require('../models');
+const AppError = require('../utils/AppError');
 const SmsService = require('../utils/smsService');
-const redis = require('../../config/redis');
+const { redisOperations } = require('../config/redis');
 
 class AuthController {
   /**
@@ -17,13 +19,13 @@ class AuthController {
 
       // 验证手机号格式
       if (!SmsService.validatePhone(phone)) {
-        return res.error('手机号格式不正确', 400);
+        throw new AppError('手机号格式不正确', 400);
       }
 
       // 验证类型
       const validTypes = ['login', 'register', 'reset_password'];
       if (!validTypes.includes(type)) {
-        return res.error('验证码类型不正确', 400);
+        throw new AppError('验证码类型不正确', 400);
       }
 
       const result = await SmsService.sendVerificationCode(phone, type);
@@ -56,13 +58,13 @@ class AuthController {
 
       // 验证手机号格式
       if (!SmsService.validatePhone(phone)) {
-        return res.error('手机号格式不正确', 400);
+        throw new AppError('手机号格式不正确', 400);
       }
 
       // 验证验证码
       const codeResult = await SmsService.verifyCode(phone, code, 'login');
       if (!codeResult.success) {
-        return res.error(codeResult.message, 400);
+        throw new AppError(codeResult.message, 400);
       }
 
       // 查找或创建用户
@@ -75,7 +77,7 @@ class AuthController {
 
       // 检查用户状态
       if (user.status === 'banned') {
-        return res.error('账号已被禁用，请联系客服', 403);
+        throw new AppError('账号已被禁用，请联系客服', 403);
       }
 
       // 更新最后登录时间
@@ -269,7 +271,8 @@ class AuthController {
         const decoded = User.verifyToken(token);
         const expireTime = decoded.exp - Math.floor(Date.now() / 1000);
         if (expireTime > 0) {
-          await redis.setex(`blacklist:${token}`, expireTime, '1');
+          // 使用封装的 Redis 方法
+          await redisOperations.set(`blacklist:${token}`, '1', expireTime);
         }
       }
 

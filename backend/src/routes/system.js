@@ -8,7 +8,8 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const SystemController = require('../controllers/systemController');
-const { validate, schemas } = require('../middleware/validation');
+const validate = require('../middleware/validation');
+const schemas = validate.schemas;
 const { authenticateToken, optionalAuth } = require('../middleware/auth');
 const rateLimiter = require('../middleware/rateLimiter');
 

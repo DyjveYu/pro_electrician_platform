@@ -1,5 +1,48 @@
 const Joi = require('joi');
 
+// 手机号验证正则
+const PHONE_REGEX = /^1[3-9]\d{9}$/;
+
+// 发送验证码验证模式
+const sendCode = Joi.object({
+  phone: Joi.string()
+    .pattern(PHONE_REGEX)
+    .required()
+    .messages({
+      'string.pattern.base': '手机号格式不正确',
+      'any.required': '手机号不能为空'
+    }),
+  type: Joi.string()
+    .valid('login', 'register')
+    .required()
+    .messages({
+      'any.only': 'type 必须是 login 或 register',
+      'any.required': 'type 不能为空'
+    })
+});
+
+// 用户登录验证模式
+const login = {
+  body: Joi.object({
+    phone: Joi.string()
+      .pattern(PHONE_REGEX)
+      .required()
+      .messages({
+        'string.pattern.base': '手机号格式不正确',
+        'any.required': '手机号不能为空'
+      }),
+    code: Joi.string()
+      .length(6)
+      .pattern(/^\d+$/)
+      .required()
+      .messages({
+        'string.length': '验证码必须为6位数字',
+        'string.pattern.base': '验证码必须为数字',
+        'any.required': '验证码不能为空'
+      })
+  })
+};
+
 // 用户资料更新验证模式
 const updateProfile = {
   body: Joi.object({
@@ -24,6 +67,19 @@ const updateProfile = {
   })
 };
 
+// 切换角色验证模式
+const switchRole = {
+  body: Joi.object({
+    role: Joi.string()
+      .valid('user', 'electrician')
+      .required()
+      .messages({
+        'any.only': '角色必须是 user 或 electrician',
+        'any.required': '角色不能为空'
+      })
+  })
+};
+
 // 获取用户资料验证模式
 const getProfile = {
   params: Joi.object({
@@ -32,6 +88,9 @@ const getProfile = {
 };
 
 module.exports = {
+  sendCode,
+  login,
   updateProfile,
+  switchRole,
   getProfile
 };
