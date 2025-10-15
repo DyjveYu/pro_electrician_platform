@@ -56,7 +56,7 @@ ServiceType.hasMany(Order, {
 });
 Order.belongsTo(ServiceType, {
   foreignKey: 'service_type_id',
-  as: 'service_type'
+  as: 'serviceType'
 });
 
 // 5. Order - Payment: 一对一

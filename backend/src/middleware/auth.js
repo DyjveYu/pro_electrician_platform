@@ -4,7 +4,7 @@
 
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const { redisOperations } = require('../config/redis');
+const redis = require('../config/redis');
 
 /**
  * 验证JWT token
@@ -20,7 +20,7 @@ const authenticateToken = async (req, res, next) => {
 
     // 检查token是否在黑名单中（如果Redis连接失败则跳过）
     try {
-      const isBlacklisted = await redisOperations.get(`blacklist:${token}`);
+      const isBlacklisted = await redis.get(`blacklist:${token}`);
       if (isBlacklisted) {
         return res.status(401).json({
           success: false,

@@ -8,32 +8,68 @@ const Joi = require('joi');
 /**
  * 验证请求参数
  * @param {Object} schema - Joi验证模式或包含Joi验证模式的对象
+ * @param {String} source - 验证来源，默认为'body'
  * @returns {Function} Express中间件函数
  */
-const validate = (schema) => {
-  return (req, res, next) => {
-    // 检查schema是否为对象，如果是对象且有body属性，则使用schema.body
-    const schemaToValidate = schema.body ? schema.body : schema;
+const validate = function(schema, source = 'body') {
+  // 直接返回中间件函数，不使用箭头函数
+  return function(req, res, next) {
+    // 处理schema是对象且包含多个验证源的情况
+    let schemaToValidate;
+    
+    if (typeof schema === 'object' && schema !== null) {
+      // 如果schema是对象且有指定source的属性，则使用该属性
+      if (schema[source]) {
+        schemaToValidate = schema[source];
+      } 
+      // 如果schema是对象且有body属性，且source是'body'，则使用schema.body
+      else if (schema.body && source === 'body') {
+        schemaToValidate = schema.body;
+      }
+      // 否则使用schema本身
+      else {
+        schemaToValidate = schema;
+      }
+    } else {
+      schemaToValidate = schema;
+    }
     
     // 添加类型检查，确保schemaToValidate是有效的Joi对象
     if (!schemaToValidate || typeof schemaToValidate.validate !== 'function') {
-      return res.error('无效的验证模式：不是有效的Joi对象', 500);
+      return res.status(500).json({ 
+        success: false, 
+        message: '无效的验证模式：不是有效的Joi对象' 
+      });
     }
     
-    const { error, value } = schemaToValidate.validate(req.body, {
-      abortEarly: false, // 返回所有错误
-      stripUnknown: true, // 移除未定义字段
-      convert: true      // 自动类型转换 
-    });
+    // 根据source获取要验证的数据
+    const dataToValidate = req[source] || {};
+    
+    try {
+      const { error, value } = schemaToValidate.validate(dataToValidate, {
+        abortEarly: false, // 返回所有错误
+        stripUnknown: true, // 移除未定义字段
+        convert: true      // 自动类型转换 
+      });
 
-    if (error) {
-      const messages = error.details.map(d => d.message).join('; ');
-      return res.error(messages, 422);
+      if (error) {
+        const messages = error.details.map(d => d.message).join('; ');
+        return res.status(422).json({
+          success: false,
+          message: messages
+        });
+      }
+
+      // 将验证后的值赋值回请求对象
+      req[source] = value;
+      next();
+    } catch (err) {
+      console.error('验证中间件错误:', err);
+      return res.status(500).json({
+        success: false,
+        message: '验证过程中发生错误'
+      });
     }
-
-    // 将验证后的值赋值给req.body
-    req.body = value;
-    next();
   };
 };
 

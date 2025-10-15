@@ -72,7 +72,7 @@ class AuthController {
       
       if (!user) {
         // 新用户注册
-        user = await User.create({ phone });
+        user = await User.createUser({ phone });
       }
 
       // 检查用户状态

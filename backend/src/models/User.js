@@ -2,7 +2,7 @@
  * 用户模型
  * 处理用户相关的数据库操作
  */
-const { DataTypes } = require('sequelize');
+const { DataTypes, Op } = require('sequelize');
 const sequelize = require('../config/sequelize');
 const jwt = require('jsonwebtoken');
 // const { AppError } = require('../utils/errorHandler');
@@ -101,8 +101,8 @@ User.findById = async function(id) {
  * @param {Object} userData - 用户数据
  * @returns {Promise<User>} - 返回创建的用户对象
  */
-User.create = async function(userData) {
-  return await sequelize.models.User.create(userData);
+User.createUser = async function(userData) {
+  return await User.build(userData).save();
 };
 
 /**
@@ -203,7 +203,7 @@ User.getUserStats = async function(userId, role) {
     stats.pending_orders = await Order.count({ 
       where: { 
         electrician_id: userId,
-        status: { [sequelize.Op.notIn]: ['completed', 'cancelled'] }
+        status: { [Op.notIn]: ['completed', 'cancelled'] }
       }
     });
     stats.completed_orders = await Order.count({ 
@@ -249,12 +249,12 @@ User.getElectricianCertification = async function(userId) {
   const user = await User.findByPk(userId, {
     include: [{
       model: sequelize.models.ElectricianCertification,
-      as: 'electricianCertification',
-      attributes: ['id', 'real_name', 'id_card', 'certificate_no', 'certificate_image', 'status', 'created_at', 'updated_at']
+      as: 'certification',
+      attributes: ['id', 'real_name', 'id_card', 'electrician_cert_no', 'cert_start_date', 'cert_end_date', 'status', 'created_at', 'updated_at']
     }]
   });
   
-  return user ? user.electricianCertification : null;
+  return user ? user.certification : null;
 };
 
 /**

@@ -349,8 +349,19 @@ const loadElectricianList = async () => {
     
     const response = await getElectricianList(params)
     if (response.code === 200) {
-      electricianList.value = response.data.list
-      pagination.total = response.data.total
+      // 适配后端统一响应格式
+      // 检查是否有data.electricians（新格式）或data.list（旧格式）
+      if (response.data.electricians) {
+        electricianList.value = response.data.electricians
+        pagination.total = response.data.total
+      } else if (response.data.list) {
+        electricianList.value = response.data.list
+        pagination.total = response.data.total
+      } else {
+        // 直接使用data作为数据源（兼容不同格式）
+        electricianList.value = response.data
+        pagination.total = response.data.length
+      }
     }
   } catch (error) {
     console.error('加载电工列表失败:', error)

@@ -5,7 +5,15 @@
 
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { query } = require('../../config/database');
+const { Op } = require('sequelize');
+const sequelize = require('../config/sequelize');
+// 导入模型
+const Admin = require('../models/Admin');
+const User = require('../models/User');
+const ElectricianCertification = require('../models/ElectricianCertification');
+const Order = require('../models/Order');
+const ServiceType = require('../models/ServiceType');
+const SystemMessage = require('../models/SystemMessage');
 
 class AdminController {
   // 管理员登录
@@ -15,18 +23,20 @@ class AdminController {
       console.log('登录请求:', { username, password });
 
       // 查询管理员
-      const admins = await query(
-        'SELECT * FROM admins WHERE username = ? AND status = "active"',
-        [username]
-      );
-      console.log('查询到的管理员:', admins.length);
+      const admin = await Admin.findOne({
+        where: {
+          username,
+          status: 'active'
+        }
+      });
+      
+      console.log('查询到的管理员:', admin ? 1 : 0);
 
-      if (admins.length === 0) {
+      if (!admin) {
         console.log('管理员不存在');
         return res.error('用户名或密码错误', 401);
       }
 
-      const admin = admins[0];
       console.log('管理员信息:', { id: admin.id, username: admin.username, passwordHash: admin.password });
 
       // 验证密码
@@ -49,10 +59,8 @@ class AdminController {
       );
 
       // 更新最后登录时间
-      await query(
-        'UPDATE admins SET last_login_at = NOW() WHERE id = ?',
-        [admin.id]
-      );
+      admin.last_login_at = new Date();
+      await admin.save();
 
       res.success({
         token,
@@ -74,16 +82,15 @@ class AdminController {
     try {
       const adminId = req.user.id;
       
-      const admins = await query(
-        'SELECT id, username, real_name, email, created_at FROM admins WHERE id = ?',
-        [adminId]
-      );
+      const admin = await Admin.findByPk(adminId, {
+        attributes: ['id', 'username', 'real_name', 'email', 'created_at']
+      });
 
-      if (admins.length === 0) {
+      if (!admin) {
         return res.error('管理员不存在', 404);
       }
 
-      res.success(admins[0]);
+      res.success(admin);
     } catch (error) {
       console.error('获取管理员信息错误:', error);
       res.error('获取信息失败');
@@ -109,44 +116,36 @@ class AdminController {
       
       console.log('开始获取用户列表，参数:', { page, limit, search, status });
 
-      // 简化查询，先测试基础功能
-      let whereClause = 'WHERE 1=1';
-      const params = [];
-
-      if (search) {
-        whereClause += ' AND (phone LIKE ? OR nickname LIKE ?)';
-        params.push(`%${search}%`, `%${search}%`);
-      }
-
+      // 构建查询条件
+      const where = {};
+      
       if (status) {
-        whereClause += ' AND status = ?';
-        params.push(status);
+        where.status = status;
+      }
+      
+      if (search) {
+        where[Op.or] = [
+          { phone: { [Op.like]: `%${search}%` } },
+          { nickname: { [Op.like]: `%${search}%` } }
+        ];
       }
 
       console.log('执行用户查询...');
-      // 获取用户列表 - 简化字段
-      const users = await query(
-        `SELECT id, phone, nickname, current_role, status, created_at 
-         FROM users ${whereClause} 
-         ORDER BY id DESC 
-         LIMIT ${parseInt(offset)}, ${parseInt(limit)}`,
-        params
-      );
+      // 使用Sequelize查询用户列表
+      const { count, rows: users } = await User.findAndCountAll({
+        where,
+        attributes: ['id', 'phone', 'nickname', 'current_role', 'status', 'created_at'],
+        order: [['id', 'DESC']],
+        offset: parseInt(offset),
+        limit: parseInt(limit)
+      });
       
       console.log('用户查询完成，结果数量:', users.length);
-
-      // 简化总数查询
-      console.log('执行计数查询...');
-      const countResult = await query(
-        `SELECT COUNT(*) as total FROM users ${whereClause}`,
-        params
-      );
-      
-      console.log('计数查询完成，总数:', countResult[0].total);
+      console.log('计数查询完成，总数:', count);
 
       res.success({
         users,
-        total: countResult[0].total,
+        total: count,
         page: parseInt(page),
         limit: parseInt(limit)
       });
@@ -161,16 +160,13 @@ class AdminController {
     try {
       const { id } = req.params;
 
-      const users = await query(
-        'SELECT * FROM users WHERE id = ?',
-        [id]
-      );
+      const user = await User.findByPk(id);
 
-      if (users.length === 0) {
+      if (!user) {
         return res.error('用户不存在', 404);
       }
 
-      res.success(users[0]);
+      res.success(user);
     } catch (error) {
       console.error('获取用户详情错误:', error);
       res.error('获取用户详情失败');
@@ -183,10 +179,14 @@ class AdminController {
       const { id } = req.params;
       const { status, reason = '' } = req.body;
 
-      await query(
-        'UPDATE users SET status = ?, ban_reason = ?, updated_at = NOW() WHERE id = ?',
-        [status, reason, id]
-      );
+      const user = await User.findByPk(id);
+      if (!user) {
+        return res.error('用户不存在', 404);
+      }
+      
+      user.status = status;
+      user.ban_reason = reason;
+      await user.save();
 
       res.success(null, `用户${status === 'banned' ? '封禁' : '解封'}成功`);
     } catch (error) {
@@ -200,79 +200,69 @@ class AdminController {
     try {
       const { page = 1, limit = 20, search = '', status = '', certification_status = '' } = req.query;
       const offset = (page - 1) * limit;
-
-      // 优化查询：先从users表获取电工用户
-      let userWhereClause = 'WHERE current_role = "electrician"';
-      const userParams = [];
-
-      if (search && search.trim() !== '') {
-        userWhereClause += ' AND (phone LIKE ? OR nickname LIKE ?)';
-        userParams.push(`%${search}%`, `%${search}%`);
-      }
-
+      
+      // 构建查询条件
+      const userWhere = {};
+      const certWhere = {};
+      
+      // 用户状态条件
       if (status && status.trim() !== '') {
-        userWhereClause += ' AND status = ?';
-        userParams.push(status);
+        userWhere.status = status;
       }
-
-      // 获取电工用户基础信息
-      const users = await query(
-        `SELECT id, phone, nickname, avatar, status, created_at
-         FROM users ${userWhereClause} 
-         ORDER BY created_at DESC 
-         LIMIT ${parseInt(offset)}, ${parseInt(limit)}`,
-        userParams
-      );
-
-      if (users.length === 0) {
-        return res.success({
-          electricians: [],
-          total: 0,
-          page: parseInt(page),
-          limit: parseInt(limit)
-        });
-      }
-
-      // 获取电工详细信息
-      const userIds = users.map(u => u.id);
-      let electricianWhereClause = `WHERE user_id IN (${userIds.map(() => '?').join(',')})`;
-      const electricianParams = [...userIds];
-
+      
+      // 认证状态条件
       if (certification_status && certification_status.trim() !== '') {
-        electricianWhereClause += ' AND certification_status = ?';
-        electricianParams.push(certification_status);
+        certWhere.status = certification_status;
       }
-
-      const electricianDetails = await query(
-        `SELECT user_id, real_name, id_card, certification_status, work_years, service_area,
-                certification_images, reject_reason
-         FROM electricians ${electricianWhereClause}`,
-        electricianParams
-      );
-
-      // 合并数据
-      const electricianMap = new Map();
-      electricianDetails.forEach(e => {
-        electricianMap.set(e.user_id, e);
+      
+      // 搜索条件
+      if (search && search.trim() !== '') {
+        userWhere[Op.or] = [
+          { phone: { [Op.like]: `%${search}%` } },
+          { nickname: { [Op.like]: `%${search}%` } }
+        ];
+      }
+      
+      // 查询电工用户和有认证申请的用户
+      const { count, rows: users } = await User.findAndCountAll({
+        where: {
+          [Op.or]: [
+            { current_role: 'electrician' },
+            { '$ElectricianCertification.id$': { [Op.ne]: null } }
+          ],
+          ...userWhere
+        },
+        attributes: ['id', 'phone', 'nickname', 'avatar', 'status', 'created_at'],
+        include: [
+          {
+            model: ElectricianCertification,
+            as: 'ElectricianCertification',
+            attributes: ['real_name', 'id_card', 'status', 'work_years', 'service_area', 'certification_images', 'reject_reason'],
+            where: Object.keys(certWhere).length ? certWhere : undefined,
+            required: false
+          }
+        ],
+        order: [['created_at', 'DESC']],
+        offset: parseInt(offset),
+        limit: parseInt(limit),
+        subQuery: false
       });
-
+      
+      // 格式化结果
       const electricians = users.map(user => {
-        const electricianInfo = electricianMap.get(user.id) || {};
+        const plainUser = user.get({ plain: true });
+        const electricianInfo = plainUser.ElectricianCertification || {};
+        delete plainUser.ElectricianCertification;
+        
         return {
-          ...user,
+          ...plainUser,
           ...electricianInfo
         };
       });
-
-      // 获取总数
-      const countResult = await query(
-        `SELECT COUNT(*) as total FROM users ${userWhereClause}`,
-        userParams
-      );
-
+      
       res.success({
         electricians,
-        total: countResult[0].total,
+        total: count,
         page: parseInt(page),
         limit: parseInt(limit)
       });
@@ -287,19 +277,28 @@ class AdminController {
     try {
       const { id } = req.params;
 
-      const electricians = await query(
-        `SELECT u.*, e.* 
-         FROM users u 
-         LEFT JOIN electricians e ON u.id = e.user_id 
-         WHERE u.id = ?`,
-        [id]
-      );
+      const user = await User.findByPk(id, {
+        include: [{
+          model: ElectricianCertification,
+          as: 'ElectricianCertification'
+        }]
+      });
 
-      if (electricians.length === 0) {
+      if (!user) {
         return res.error('电工不存在', 404);
       }
 
-      res.success(electricians[0]);
+      // 将数据转换为平面对象
+      const plainUser = user.get({ plain: true });
+      const electricianInfo = plainUser.ElectricianCertification || {};
+      delete plainUser.ElectricianCertification;
+      
+      const result = {
+        ...plainUser,
+        ...electricianInfo
+      };
+
+      res.success(result);
     } catch (error) {
       console.error('获取电工详情错误:', error);
       res.error('获取电工详情失败');
@@ -312,10 +311,18 @@ class AdminController {
       const { id } = req.params;
       const { status, reason = '' } = req.body;
 
-      await query(
-        'UPDATE electricians SET certification_status = ?, reject_reason = ?, reviewed_at = NOW() WHERE user_id = ?',
-        [status, reason, id]
-      );
+      const certification = await ElectricianCertification.findOne({
+        where: { user_id: id }
+      });
+      
+      if (!certification) {
+        return res.error('认证申请不存在', 404);
+      }
+      
+      certification.status = status;
+      certification.reject_reason = reason;
+      certification.reviewed_at = new Date();
+      await certification.save();
 
       res.success(null, '审核完成');
     } catch (error) {
@@ -330,87 +337,64 @@ class AdminController {
       const { page = 1, limit = 20, search = '', status = '', service_type = '' } = req.query;
       const offset = (page - 1) * limit;
 
-      // 优化查询：先获取工单基础信息
-      let whereClause = 'WHERE 1=1';
-      const params = [];
+      // 构建查询条件
+      const where = {};
 
       if (search && search.trim() !== '') {
-        whereClause += ' AND order_no LIKE ?';
-        params.push(`%${search}%`);
+        where.order_no = { [Op.like]: `%${search}%` };
       }
 
       if (status && status.trim() !== '') {
-        whereClause += ' AND status = ?';
-        params.push(status);
+        where.status = status;
       }
 
       if (service_type && service_type.trim() !== '') {
-        whereClause += ' AND service_type_id = ?';
-        params.push(service_type);
+        where.service_type_id = service_type;
       }
 
-      // 获取工单基础信息
-      const orders = await query(
-        `SELECT id, order_no, user_id, electrician_id, service_type_id, status, 
-                final_amount, created_at, updated_at
-         FROM orders ${whereClause} 
-         ORDER BY created_at DESC 
-         LIMIT ${parseInt(offset)}, ${parseInt(limit)}`,
-        params
-      );
+      // 使用Sequelize查询工单列表
+      const { count, rows: orders } = await Order.findAndCountAll({
+        where,
+        attributes: ['id', 'order_no', 'user_id', 'electrician_id', 'service_type_id', 'status', 
+                    'final_amount', 'created_at', 'updated_at'],
+        include: [
+          {
+            model: User,
+            as: 'User',
+            attributes: ['nickname'],
+            required: false
+          },
+          {
+            model: User,
+            as: 'Electrician',
+            attributes: ['nickname'],
+            required: false
+          },
+          {
+            model: ServiceType,
+            attributes: ['name'],
+            required: false
+          }
+        ],
+        order: [['created_at', 'DESC']],
+        offset: parseInt(offset),
+        limit: parseInt(limit)
+      });
 
-      if (orders.length === 0) {
-        return res.success({
-          orders: [],
-          total: 0,
-          page: parseInt(page),
-          limit: parseInt(limit)
-        });
-      }
-
-      // 获取关联数据
-      const userIds = [...new Set(orders.map(o => o.user_id).filter(Boolean))];
-      const electricianIds = [...new Set(orders.map(o => o.electrician_id).filter(Boolean))];
-      const serviceTypeIds = [...new Set(orders.map(o => o.service_type_id).filter(Boolean))];
-
-      // 并行查询关联数据
-      const [users, electricians, serviceTypes] = await Promise.all([
-        userIds.length > 0 ? query(
-          `SELECT id, nickname FROM users WHERE id IN (${userIds.map(() => '?').join(',')})`,
-          userIds
-        ) : [],
-        electricianIds.length > 0 ? query(
-          `SELECT id, nickname FROM users WHERE id IN (${electricianIds.map(() => '?').join(',')})`,
-          electricianIds
-        ) : [],
-        serviceTypeIds.length > 0 ? query(
-          `SELECT id, name FROM service_types WHERE id IN (${serviceTypeIds.map(() => '?').join(',')})`,
-          serviceTypeIds
-        ) : []
-      ]);
-
-      // 创建映射
-      const userMap = new Map(users.map(u => [u.id, u.nickname]));
-      const electricianMap = new Map(electricians.map(e => [e.id, e.nickname]));
-      const serviceTypeMap = new Map(serviceTypes.map(st => [st.id, st.name]));
-
-      // 合并数据
-      const enrichedOrders = orders.map(order => ({
-        ...order,
-        user_nickname: userMap.get(order.user_id) || '',
-        electrician_nickname: electricianMap.get(order.electrician_id) || '',
-        service_type_name: serviceTypeMap.get(order.service_type_id) || ''
-      }));
-
-      // 获取总数
-      const countResult = await query(
-        `SELECT COUNT(*) as total FROM orders ${whereClause}`,
-        params
-      );
+      // 格式化结果
+      const enrichedOrders = orders.map(order => {
+        const plainOrder = order.get({ plain: true });
+        return {
+          ...plainOrder,
+          user_nickname: plainOrder.User ? plainOrder.User.nickname : '',
+          electrician_nickname: plainOrder.Electrician ? plainOrder.Electrician.nickname : '',
+          service_type_name: plainOrder.ServiceType ? plainOrder.ServiceType.name : ''
+        };
+      });
 
       res.success({
         orders: enrichedOrders,
-        total: countResult[0].total,
+        total: count,
         page: parseInt(page),
         limit: parseInt(limit)
       });
@@ -425,23 +409,46 @@ class AdminController {
     try {
       const { id } = req.params;
 
-      const orders = await query(
-        `SELECT o.*, u.nickname as user_nickname, u.phone as user_phone,
-                e.nickname as electrician_nickname, e.phone as electrician_phone,
-                st.name as service_type_name
-         FROM orders o 
-         LEFT JOIN users u ON o.user_id = u.id 
-         LEFT JOIN users e ON o.electrician_id = e.id 
-         LEFT JOIN service_types st ON o.service_type_id = st.id 
-         WHERE o.id = ?`,
-        [id]
-      );
+      const order = await Order.findByPk(id, {
+        include: [
+          {
+            model: User,
+            as: 'User',
+            attributes: ['nickname', 'phone']
+          },
+          {
+            model: User,
+            as: 'Electrician',
+            attributes: ['nickname', 'phone']
+          },
+          {
+            model: ServiceType,
+            attributes: ['name']
+          }
+        ]
+      });
 
-      if (orders.length === 0) {
+      if (!order) {
         return res.error('工单不存在', 404);
       }
 
-      res.success(orders[0]);
+      // 格式化结果
+      const plainOrder = order.get({ plain: true });
+      const result = {
+        ...plainOrder,
+        user_nickname: plainOrder.User ? plainOrder.User.nickname : '',
+        user_phone: plainOrder.User ? plainOrder.User.phone : '',
+        electrician_nickname: plainOrder.Electrician ? plainOrder.Electrician.nickname : '',
+        electrician_phone: plainOrder.Electrician ? plainOrder.Electrician.phone : '',
+        service_type_name: plainOrder.ServiceType ? plainOrder.ServiceType.name : ''
+      };
+      
+      // 删除嵌套对象
+      delete result.User;
+      delete result.Electrician;
+      delete result.ServiceType;
+
+      res.success(result);
     } catch (error) {
       console.error('获取工单详情错误:', error);
       res.error('获取工单详情失败');
@@ -454,10 +461,14 @@ class AdminController {
       const { id } = req.params;
       const { status, reason = '' } = req.body;
 
-      await query(
-        'UPDATE orders SET status = ?, admin_note = ?, updated_at = NOW() WHERE id = ?',
-        [status, reason, id]
-      );
+      const order = await Order.findByPk(id);
+      if (!order) {
+        return res.error('工单不存在', 404);
+      }
+      
+      order.status = status;
+      order.admin_note = reason;
+      await order.save();
 
       res.success(null, '工单状态更新成功');
     } catch (error) {
