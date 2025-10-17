@@ -349,48 +349,19 @@ const loadElectricianList = async () => {
     
     const response = await getElectricianList(params)
     if (response.code === 200) {
-      // 适配后端统一响应格式
-      // 检查是否有data.electricians（新格式）或data.list（旧格式）
-      if (response.data.electricians) {
-        electricianList.value = response.data.electricians
-        pagination.total = response.data.total
-      } else if (response.data.list) {
-        electricianList.value = response.data.list
-        pagination.total = response.data.total
-      } else {
-        // 直接使用data作为数据源（兼容不同格式）
-        electricianList.value = response.data
-        pagination.total = response.data.length
-      }
+      // 后端已经返回统一格式的数据
+      electricianList.value = response.data.list || []
+      pagination.total = response.data.total || 0
+    } else {
+      ElMessage.error(response.message || '获取电工列表失败')
+      electricianList.value = []
+      pagination.total = 0
     }
   } catch (error) {
     console.error('加载电工列表失败:', error)
-    // 使用模拟数据
-    electricianList.value = [
-      {
-        id: 1,
-        phone: '13900139000',
-        real_name: '张师傅',
-        id_card: '110101199001011234',
-        electrician_license: 'DG202401001',
-        license_expiry: '2025-12-31',
-        status: 'pending',
-        created_at: '2024-01-10T00:00:00Z',
-        approved_at: null
-      },
-      {
-        id: 2,
-        phone: '13800138001',
-        real_name: '李师傅',
-        id_card: '110101199002021234',
-        electrician_license: 'DG202401002',
-        license_expiry: '2024-02-15',
-        status: 'approved',
-        created_at: '2024-01-08T00:00:00Z',
-        approved_at: '2024-01-09T00:00:00Z'
-      }
-    ]
-    pagination.total = 2
+    ElMessage.error('网络错误，请稍后重试')
+    electricianList.value = []
+    pagination.total = 0
   } finally {
     loading.value = false
   }
@@ -482,13 +453,16 @@ const handleViewDetail = async (electrician) => {
   try {
     const response = await getElectricianDetail(electrician.id)
     if (response.code === 200) {
+      // 后端已经返回格式化的数据，直接使用
       currentElectrician.value = response.data
     } else {
+      ElMessage.error(response.message || '获取电工详情失败')
       currentElectrician.value = electrician
     }
     detailDialogVisible.value = true
   } catch (error) {
     console.error('获取电工详情失败:', error)
+    ElMessage.error('网络错误，请稍后重试')
     currentElectrician.value = electrician
     detailDialogVisible.value = true
   }

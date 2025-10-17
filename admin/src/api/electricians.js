@@ -12,18 +12,24 @@ export const getElectricianList = (params) => {
 // 审核电工认证
 export const approveElectrician = (id, data) => {
   return request({
-    url: `/admin/electricians/${id}/approve`,
-    method: 'post',
-    data
+    url: `/admin/electricians/${id}/review`,
+    method: 'put',
+    data: {
+      status: 'approved',
+      ...data
+    }
   })
 }
 
 // 驳回电工认证
 export const rejectElectrician = (id, data) => {
   return request({
-    url: `/admin/electricians/${id}/reject`,
-    method: 'post',
-    data
+    url: `/admin/electricians/${id}/review`,
+    method: 'put',
+    data: {
+      status: 'rejected',
+      reason: data.reason || ''
+    }
   })
 }
 

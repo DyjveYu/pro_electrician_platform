@@ -198,70 +198,72 @@ class AdminController {
   // 获取电工列表
   static async getElectricians(req, res) {
     try {
-      const { page = 1, limit = 20, search = '', status = '', certification_status = '' } = req.query;
+      const { page = 1, limit = 20, keyword = '', status = '' } = req.query;
       const offset = (page - 1) * limit;
       
       // 构建查询条件
-      const userWhere = {};
       const certWhere = {};
-      
-      // 用户状态条件
-      if (status && status.trim() !== '') {
-        userWhere.status = status;
-      }
+      const userWhere = {};
       
       // 认证状态条件
-      if (certification_status && certification_status.trim() !== '') {
-        certWhere.status = certification_status;
+      if (status && status.trim() !== '') {
+        certWhere.status = status;
       }
       
-      // 搜索条件
-      if (search && search.trim() !== '') {
+      // 搜索条件 - 支持搜索真实姓名和手机号
+      if (keyword && keyword.trim() !== '') {
+        const searchTerm = keyword.trim();
+        certWhere[Op.or] = [
+          { real_name: { [Op.like]: `%${searchTerm}%` } }
+        ];
         userWhere[Op.or] = [
-          { phone: { [Op.like]: `%${search}%` } },
-          { nickname: { [Op.like]: `%${search}%` } }
+          { phone: { [Op.like]: `%${searchTerm}%` } }
         ];
       }
       
-      // 查询电工用户和有认证申请的用户
-      const { count, rows: users } = await User.findAndCountAll({
-        where: {
-          [Op.or]: [
-            { current_role: 'electrician' },
-            { '$ElectricianCertification.id$': { [Op.ne]: null } }
-          ],
-          ...userWhere
-        },
-        attributes: ['id', 'phone', 'nickname', 'avatar', 'status', 'created_at'],
+      // 查询电工认证记录，关联用户信息
+      const { count, rows: certifications } = await ElectricianCertification.findAndCountAll({
+        where: certWhere,
         include: [
           {
-            model: ElectricianCertification,
-            as: 'ElectricianCertification',
-            attributes: ['real_name', 'id_card', 'status', 'work_years', 'service_area', 'certification_images', 'reject_reason'],
-            where: Object.keys(certWhere).length ? certWhere : undefined,
-            required: false
+            model: User,
+            as: 'user',
+            attributes: ['id', 'phone', 'nickname', 'avatar', 'status', 'created_at'],
+            where: Object.keys(userWhere).length ? userWhere : undefined,
+            required: true
           }
         ],
         order: [['created_at', 'DESC']],
         offset: parseInt(offset),
-        limit: parseInt(limit),
-        subQuery: false
+        limit: parseInt(limit)
       });
       
-      // 格式化结果
-      const electricians = users.map(user => {
-        const plainUser = user.get({ plain: true });
-        const electricianInfo = plainUser.ElectricianCertification || {};
-        delete plainUser.ElectricianCertification;
+      // 格式化结果，映射字段名称
+      const electricians = certifications.map(cert => {
+        const plainCert = cert.get({ plain: true });
+        const userInfo = plainCert.User || {};
         
         return {
-          ...plainUser,
-          ...electricianInfo
+          id: plainCert.id,
+          user_id: plainCert.user_id,
+          phone: userInfo.phone,
+          real_name: plainCert.real_name,
+          id_card: plainCert.id_card,
+          electrician_license: plainCert.electrician_cert_no, // 映射字段名
+          license_expiry: plainCert.cert_end_date, // 映射字段名
+          status: plainCert.status,
+          reject_reason: plainCert.reject_reason,
+          created_at: plainCert.created_at,
+          updated_at: plainCert.updated_at,
+          // 用户相关信息
+          user_status: userInfo.status,
+          nickname: userInfo.nickname,
+          avatar: userInfo.avatar
         };
       });
       
       res.success({
-        electricians,
+        list: electricians,
         total: count,
         page: parseInt(page),
         limit: parseInt(limit)
@@ -277,25 +279,46 @@ class AdminController {
     try {
       const { id } = req.params;
 
-      const user = await User.findByPk(id, {
+      // 直接查询电工认证记录
+      const certification = await ElectricianCertification.findByPk(id, {
         include: [{
-          model: ElectricianCertification,
-          as: 'ElectricianCertification'
+          model: User,
+          as: 'user',
+          attributes: ['id', 'phone', 'nickname', 'avatar', 'status', 'created_at']
         }]
       });
 
-      if (!user) {
-        return res.error('电工不存在', 404);
+      if (!certification) {
+        return res.error('电工认证记录不存在', 404);
       }
 
-      // 将数据转换为平面对象
-      const plainUser = user.get({ plain: true });
-      const electricianInfo = plainUser.ElectricianCertification || {};
-      delete plainUser.ElectricianCertification;
+      // 格式化结果，映射字段名称
+      const plainCert = certification.get({ plain: true });
+      const userInfo = plainCert.User || {};
       
       const result = {
-        ...plainUser,
-        ...electricianInfo
+        id: plainCert.id,
+        user_id: plainCert.user_id,
+        phone: userInfo.phone,
+        real_name: plainCert.real_name,
+        id_card: plainCert.id_card,
+        electrician_license: plainCert.electrician_cert_no, // 映射字段名
+        license_expiry: plainCert.cert_end_date, // 映射字段名
+        cert_start_date: plainCert.cert_start_date,
+        status: plainCert.status,
+        reject_reason: plainCert.reject_reason,
+        created_at: plainCert.created_at,
+        updated_at: plainCert.updated_at,
+        approved_at: plainCert.approved_at,
+        // 用户相关信息
+        user_status: userInfo.status,
+        nickname: userInfo.nickname,
+        avatar: userInfo.avatar,
+        user_created_at: userInfo.created_at,
+        // 证件照片字段（如果存在）
+        id_card_front: plainCert.id_card_front,
+        id_card_back: plainCert.id_card_back,
+        license_photo: plainCert.license_photo
       };
 
       res.success(result);
@@ -311,17 +334,21 @@ class AdminController {
       const { id } = req.params;
       const { status, reason = '' } = req.body;
 
-      const certification = await ElectricianCertification.findOne({
-        where: { user_id: id }
-      });
+      // 直接通过认证记录ID查询
+      const certification = await ElectricianCertification.findByPk(id);
       
       if (!certification) {
         return res.error('认证申请不存在', 404);
       }
       
       certification.status = status;
-      certification.reject_reason = reason;
-      certification.reviewed_at = new Date();
+      if (status === 'rejected') {
+        certification.reject_reason = reason;
+      } else if (status === 'approved') {
+        certification.approved_at = new Date();
+        certification.reject_reason = null;
+      }
+      
       await certification.save();
 
       res.success(null, '审核完成');

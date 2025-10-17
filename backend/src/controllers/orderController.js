@@ -292,8 +292,8 @@ class OrderController {
 
       // 验证电工认证状态
       const electrician = await User.findByPk(electricianId);
-      if (!electrician || electrician.role !== 'electrician' || electrician.status !== 'active') {
-        throw new AppError('您还未通过电工认证，无法接单', 403);
+      if (!electrician || electrician.status !== 'active') {
+        throw new AppError('您的账号未激活，无法接单', 403);
       }
 
       // 查询工单
@@ -309,20 +309,27 @@ class OrderController {
 
       // 使用事务更新工单状态
       await sequelize.transaction(async (t) => {
-        // 更新工单
-        await order.update({
+        // 准备更新数据
+        const updateData = {
           electrician_id: electricianId,
           status: 'accepted',
-          accepted_at: now,
-          quoted_price: parseFloat(quoted_price)
-        }, { transaction: t });
+          accepted_at: now
+        };
+        
+        // 如果提供了报价，则添加到更新数据中
+        if (quoted_price !== undefined) {
+          updateData.quoted_price = parseFloat(quoted_price);
+        }
+        
+        // 更新工单
+        await order.update(updateData, { transaction: t });
 
         // 创建状态日志
         await OrderStatusLog.create({
           order_id: order.id,
-          status: 'accepted',
+          to_status: 'accepted',
           operator_id: electricianId,
-          operator_role: 'electrician',
+          operator_type: 'electrician',
           remark: `电工接单，报价: ¥${quoted_price}`,
           created_at: now
         }, { transaction: t });
@@ -497,6 +504,423 @@ class OrderController {
       res.success({
         message: '工单已取消'
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+  
+  /**
+   * 用户确认工单
+   * @route PUT /api/orders/:id/confirm
+   * @access 用户角色
+   * @param {Object} req - 请求对象
+   * @param {Object} res - 响应对象
+   * @param {Function} next - 下一个中间件
+   */
+  static async confirmOrder(req, res, next) {
+    (async () => {
+      try {
+        const { id } = req.params;
+        const { confirmed } = req.body;
+        
+        // 确保用户已登录且为用户角色
+        if (!req.user) {
+          return res.error('未认证用户', 401);
+        }
+        if (req.user.current_role !== 'user') {
+          return res.error('只有用户角色可以确认工单', 403);
+        }
+        
+        // 查找工单
+        const order = await Order.findByPk(id);
+        if (!order) {
+          return res.error('工单不存在', 404);
+        }
+        
+        // 验证工单所有权
+        if (order.user_id !== req.user.id) {
+          return res.error('无权操作此工单', 403);
+        }
+        
+        // 验证工单状态
+        if (order.status !== 'accepted') {
+          return res.error('只有已接单状态的工单可以确认', 400);
+        }
+        
+        // 开始事务
+        const transaction = await sequelize.transaction();
+        
+        try {
+          // 更新工单状态为进行中
+          await order.update({
+            status: 'in_progress',
+            confirmed_at: new Date()
+          }, { transaction });
+          
+          // 记录状态变更日志
+          await OrderStatusLog.create({
+            order_id: order.id,
+            from_status: 'accepted',
+            to_status: 'in_progress',
+            operator_id: req.user.id,
+            operator_type: 'user',
+            operator_role: 'user',
+            remark: '用户确认工单，开始服务'
+          }, { transaction });
+          
+          // 提交事务
+          await transaction.commit();
+          
+          return res.success({
+            message: '工单确认成功',
+            order_id: order.id
+          });
+        } catch (error) {
+          // 回滚事务
+          await transaction.rollback();
+          throw error;
+        }
+      } catch (error) {
+        next(error);
+      }
+    })();
+  }
+
+  /**
+   * 电工修改订单内容和金额
+   * @route PUT /api/orders/:id/update
+   * @access 电工角色
+   * @param {Object} req - 请求对象
+   * @param {Object} res - 响应对象
+   * @param {Function} next - 下一个中间件
+   */
+  static async updateOrderByElectrician(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { title, description, amount, remark } = req.body;
+      
+      // 确保用户已登录且为电工角色
+      if (!req.user) {
+        return res.error('未认证用户', 401);
+      }
+      if (req.user.current_role !== 'electrician') {
+        return res.error('只有电工角色可以修改订单', 403);
+      }
+      
+      // 查找工单
+      const order = await Order.findByPk(id);
+      if (!order) {
+        return res.error('工单不存在', 404);
+      }
+      
+      // 验证电工是否为该工单的负责人
+      if (order.electrician_id !== req.user.id) {
+        return res.error('您不是该工单的负责电工', 403);
+      }
+      
+      // 验证工单状态
+      if (order.status !== 'in_progress') {
+        return res.error('只有进行中状态的工单可以修改', 400);
+      }
+      
+      // 开始事务
+      const transaction = await sequelize.transaction();
+      
+      try {
+        // 更新工单信息
+        const updateData = {};
+        if (title) updateData.title = title;
+        if (description) updateData.description = description;
+        if (amount !== undefined) updateData.amount = amount;
+        
+        // 标记为需要用户确认
+        updateData.needs_confirmation = true;
+        updateData.last_modified_at = new Date();
+        
+        await order.update(updateData, { transaction });
+        
+        // 记录修改日志
+        await OrderStatusLog.create({
+          order_id: order.id,
+          from_status: 'in_progress',
+          to_status: 'in_progress',
+          operator_id: req.user.id,
+          operator_type: 'electrician',
+          operator_role: 'electrician',
+          remark: remark || '电工修改了订单内容和金额'
+        }, { transaction });
+        
+        // 提交事务
+        await transaction.commit();
+        
+        return res.success({
+          message: '订单修改成功，等待用户确认',
+          order_id: order.id
+        });
+      } catch (error) {
+        // 回滚事务
+        await transaction.rollback();
+        throw error;
+      }
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * 用户确认订单内容和金额
+   * @route POST /api/orders/:id/confirm-update
+   * @access 用户角色
+   * @param {Object} req - 请求对象
+   * @param {Object} res - 响应对象
+   * @param {Function} next - 下一个中间件
+   */
+  static async confirmOrderUpdate(req, res, next) {
+    try {
+      const { id } = req.params;
+      
+      // 确保用户已登录且为用户角色
+      if (!req.user) {
+        return res.error('未认证用户', 401);
+      }
+      if (req.user.current_role !== 'user') {
+        return res.error('只有用户角色可以确认订单修改', 403);
+      }
+      
+      // 查找工单
+      const order = await Order.findByPk(id);
+      if (!order) {
+        return res.error('工单不存在', 404);
+      }
+      
+      // 验证工单所有权
+      if (order.user_id !== req.user.id) {
+        return res.error('无权操作此工单', 403);
+      }
+      
+      // 验证工单状态
+      if (order.status !== 'in_progress') {
+        return res.error('只有进行中状态的工单可以确认修改', 400);
+      }
+      
+      // 验证是否需要确认
+      if (!order.needs_confirmation) {
+        return res.error('当前订单没有待确认的修改', 400);
+      }
+      
+      // 开始事务
+      const transaction = await sequelize.transaction();
+      
+      try {
+        // 更新工单状态
+        await order.update({
+          needs_confirmation: false,
+          confirmed_at: new Date()
+        }, { transaction });
+        
+        // 记录状态变更日志
+        await OrderStatusLog.create({
+          order_id: order.id,
+          from_status: 'in_progress',
+          to_status: 'in_progress',
+          operator_id: req.user.id,
+          operator_type: 'user',
+          operator_role: 'user',
+          remark: '用户确认了订单修改'
+        }, { transaction });
+        
+        // 提交事务
+        await transaction.commit();
+        
+        return res.success({
+          message: '订单修改确认成功',
+          order_id: order.id
+        });
+      } catch (error) {
+        // 回滚事务
+        await transaction.rollback();
+        throw error;
+      }
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * 发起取消订单
+   * @route POST /api/orders/:id/initiate-cancel
+   * @access 用户、电工角色
+   * @param {Object} req - 请求对象
+   * @param {Object} res - 响应对象
+   * @param {Function} next - 下一个中间件
+   */
+  static async initiateCancelOrder(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { reason } = req.body;
+      
+      // 确保用户已登录
+      if (!req.user) {
+        return res.error('未认证用户', 401);
+      }
+      
+      // 验证用户角色
+      if (!['user', 'electrician'].includes(req.user.current_role)) {
+        return res.error('无权操作', 403);
+      }
+      
+      // 查找工单
+      const order = await Order.findByPk(id);
+      if (!order) {
+        return res.error('工单不存在', 404);
+      }
+      
+      // 验证操作权限
+      if (req.user.current_role === 'user' && order.user_id !== req.user.id) {
+        return res.error('无权操作此工单', 403);
+      }
+      
+      if (req.user.current_role === 'electrician' && order.electrician_id !== req.user.id) {
+        return res.error('无权操作此工单', 403);
+      }
+      
+      // 验证工单状态
+      if (order.status !== 'in_progress') {
+        return res.error('只有进行中状态的工单可以发起取消', 400);
+      }
+      
+      // 检查是否已经有取消请求
+      if (order.cancel_initiated) {
+        return res.error('该工单已有取消请求，等待对方确认', 400);
+      }
+      
+      // 开始事务
+      const transaction = await sequelize.transaction();
+      
+      try {
+        // 更新工单状态
+        await order.update({
+          cancel_initiated: true,
+          cancel_initiator: req.user.current_role,
+          cancel_reason: reason,
+          cancel_initiated_at: new Date()
+        }, { transaction });
+        
+        // 记录状态变更日志
+        await OrderStatusLog.create({
+          order_id: order.id,
+          from_status: 'in_progress',
+          to_status: 'in_progress',
+          operator_id: req.user.id,
+          operator_type: req.user.current_role,
+          operator_role: req.user.current_role,
+          remark: `${req.user.current_role === 'user' ? '用户' : '电工'}发起取消订单请求：${reason}`
+        }, { transaction });
+        
+        // 提交事务
+        await transaction.commit();
+        
+        return res.success({
+          message: '取消订单请求已发起，等待对方确认',
+          order_id: order.id
+        });
+      } catch (error) {
+        // 回滚事务
+        await transaction.rollback();
+        throw error;
+      }
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * 确认取消订单
+   * @route POST /api/orders/:id/confirm-cancel
+   * @access 用户、电工角色
+   * @param {Object} req - 请求对象
+   * @param {Object} res - 响应对象
+   * @param {Function} next - 下一个中间件
+   */
+  static async confirmCancelOrder(req, res, next) {
+    try {
+      const { id } = req.params;
+      
+      // 确保用户已登录
+      if (!req.user) {
+        return res.error('未认证用户', 401);
+      }
+      
+      // 验证用户角色
+      if (!['user', 'electrician'].includes(req.user.current_role)) {
+        return res.error('无权操作', 403);
+      }
+      
+      // 查找工单
+      const order = await Order.findByPk(id);
+      if (!order) {
+        return res.error('工单不存在', 404);
+      }
+      
+      // 验证操作权限
+      if (req.user.current_role === 'user' && order.user_id !== req.user.id) {
+        return res.error('无权操作此工单', 403);
+      }
+      
+      if (req.user.current_role === 'electrician' && order.electrician_id !== req.user.id) {
+        return res.error('无权操作此工单', 403);
+      }
+      
+      // 验证工单状态
+      if (order.status !== 'in_progress') {
+        return res.error('只有进行中状态的工单可以确认取消', 400);
+      }
+      
+      // 检查是否有取消请求
+      if (!order.cancel_initiated) {
+        return res.error('该工单没有待确认的取消请求', 400);
+      }
+      
+      // 验证确认方不是发起方
+      if (order.cancel_initiator === req.user.current_role) {
+        return res.error('您是取消请求的发起方，无需再次确认', 400);
+      }
+      
+      // 开始事务
+      const transaction = await sequelize.transaction();
+      
+      try {
+        // 更新工单状态为已取消
+        await order.update({
+          status: 'cancelled',
+          cancel_confirmed: true,
+          cancel_confirmed_at: new Date(),
+          cancel_confirmer: req.user.current_role
+        }, { transaction });
+        
+        // 记录状态变更日志
+        await OrderStatusLog.create({
+          order_id: order.id,
+          from_status: 'in_progress',
+          to_status: 'cancelled',
+          operator_id: req.user.id,
+          operator_type: req.user.current_role,
+          operator_role: req.user.current_role,
+          remark: `${req.user.current_role === 'user' ? '用户' : '电工'}确认取消订单`
+        }, { transaction });
+        
+        // 提交事务
+        await transaction.commit();
+        
+        return res.success({
+          message: '订单已成功取消',
+          order_id: order.id
+        });
+      } catch (error) {
+        // 回滚事务
+        await transaction.rollback();
+        throw error;
+      }
     } catch (error) {
       next(error);
     }

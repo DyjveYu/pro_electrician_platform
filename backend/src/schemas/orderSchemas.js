@@ -142,15 +142,7 @@ const getOrderDetail = Joi.object({
     })
 });
 
-// 电工抢单的验证Schema
-const takeOrder = Joi.object({
-  quoted_price: Joi.number().positive().required()
-    .messages({
-      'any.required': '报价是必填项',
-      'number.base': '报价必须是数字',
-      'number.positive': '报价必须是正数'
-    })
-});
+// 电工抢单不需要参数验证
 
 // 完成工单的验证Schema
 const completeOrder = Joi.object({
@@ -182,11 +174,65 @@ const cancelOrder = Joi.object({
     })
 });
 
+// 确认工单的验证Schema
+const confirmOrder = Joi.object({
+  confirmed: Joi.boolean().valid(true).optional()
+    .messages({
+      'boolean.base': '确认状态必须是布尔值',
+      'any.only': '确认状态必须为true'
+    })
+}).optional();
+
+// 电工修改订单内容和金额的验证Schema
+const updateOrderByElectrician = Joi.object({
+  title: Joi.string().min(2).max(100).optional()
+    .messages({
+      'string.min': '工单标题至少需要2个字符',
+      'string.max': '工单标题不能超过100个字符'
+    }),
+  description: Joi.string().max(1000).optional()
+    .messages({
+      'string.max': '工单描述不能超过1000个字符'
+    }),
+  amount: Joi.number().min(0).required()
+    .messages({
+      'any.required': '订单金额是必填项',
+      'number.base': '订单金额必须是数字',
+      'number.min': '订单金额不能小于0'
+    }),
+  remark: Joi.string().max(500).optional()
+    .messages({
+      'string.max': '备注不能超过500个字符'
+    })
+});
+
+// 订单取消发起的验证Schema
+const initiateCancelOrder = Joi.object({
+  reason: Joi.string().max(500).required()
+    .messages({
+      'any.required': '取消原因是必填项',
+      'string.max': '取消原因不能超过500个字符'
+    })
+});
+
+// 订单取消确认的验证Schema
+const confirmCancelOrder = Joi.object({
+  confirmed: Joi.boolean().valid(true).required()
+    .messages({
+      'any.required': '确认状态是必填项',
+      'boolean.base': '确认状态必须是布尔值',
+      'any.only': '确认状态必须为true'
+    })
+});
+
 module.exports = {
   createOrder,
   getOrdersList,
   getOrderDetail,
-  takeOrder,
   completeOrder,
-  cancelOrder
+  cancelOrder,
+  confirmOrder,
+  updateOrderByElectrician,
+  initiateCancelOrder,
+  confirmCancelOrder
 };
