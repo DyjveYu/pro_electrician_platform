@@ -1,0 +1,348 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1800" height="1400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .table-box { fill: #f8f9fa; stroke: #333; stroke-width: 2; }
+      .table-header { fill: #007bff; }
+      .table-title { fill: white; font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; text-anchor: middle; }
+      .field-text { fill: #333; font-family: Arial, sans-serif; font-size: 11px; }
+      .pk-field { fill: #ff6b6b; font-weight: bold; }
+      .fk-field { fill: #4ecdc4; }
+      .relation-line { stroke: #666; stroke-width: 2; fill: none; }
+      .relation-arrow { fill: #666; }
+    </style>
+  </defs>
+  
+  <!-- 标题 -->
+  <text x="900" y="30" class="table-title" style="font-size: 20px; fill: #333;">专业电工平台数据库 ER 图</text>
+  
+  <!-- users 表 -->
+  <g id="users">
+    <rect x="50" y="80" width="200" height="220" class="table-box"/>
+    <rect x="50" y="80" width="200" height="30" class="table-header"/>
+    <text x="150" y="100" class="table-title">users (用户表)</text>
+    <text x="60" y="120" class="field-text pk-field">• id (PK)</text>
+    <text x="60" y="135" class="field-text">• phone (手机号)</text>
+    <text x="60" y="150" class="field-text">• nickname (昵称)</text>
+    <text x="60" y="165" class="field-text">• avatar (头像)</text>
+    <text x="60" y="180" class="field-text">• current_role (当前角色)</text>
+    <text x="60" y="195" class="field-text">• can_be_electrician</text>
+    <text x="60" y="210" class="field-text">• status (状态)</text>
+    <text x="60" y="225" class="field-text">• last_login_at</text>
+    <text x="60" y="240" class="field-text">• created_at</text>
+    <text x="60" y="255" class="field-text">• updated_at</text>
+  </g>
+
+  <!-- admins 表 -->
+  <g id="admins">
+    <rect x="300" y="80" width="200" height="200" class="table-box"/>
+    <rect x="300" y="80" width="200" height="30" class="table-header"/>
+    <text x="400" y="100" class="table-title">admins (管理员表)</text>
+    <text x="310" y="120" class="field-text pk-field">• id (PK)</text>
+    <text x="310" y="135" class="field-text">• username (用户名)</text>
+    <text x="310" y="150" class="field-text">• password (密码)</text>
+    <text x="310" y="165" class="field-text">• real_name (真实姓名)</text>
+    <text x="310" y="180" class="field-text">• email (邮箱)</text>
+    <text x="310" y="195" class="field-text">• status (状态)</text>
+    <text x="310" y="210" class="field-text">• last_login_at</text>
+    <text x="310" y="225" class="field-text">• created_at</text>
+    <text x="310" y="240" class="field-text">• updated_at</text>
+  </g>
+
+  <!-- electricians 表 -->
+  <g id="electricians">
+    <rect x="50" y="350" width="220" height="240" class="table-box"/>
+    <rect x="50" y="350" width="220" height="30" class="table-header"/>
+    <text x="160" y="370" class="table-title">electricians (电工信息表)</text>
+    <text x="60" y="390" class="field-text pk-field">• id (PK)</text>
+    <text x="60" y="405" class="field-text fk-field">• user_id (FK)</text>
+    <text x="60" y="420" class="field-text">• real_name (真实姓名)</text>
+    <text x="60" y="435" class="field-text">• id_card (身份证号)</text>
+    <text x="60" y="450" class="field-text">• certification_status</text>
+    <text x="60" y="465" class="field-text">• work_years (工作年限)</text>
+    <text x="60" y="480" class="field-text">• service_area (服务区域)</text>
+    <text x="60" y="495" class="field-text">• certification_images</text>
+    <text x="60" y="510" class="field-text">• reject_reason</text>
+    <text x="60" y="525" class="field-text">• reviewed_at</text>
+    <text x="60" y="540" class="field-text">• created_at</text>
+    <text x="60" y="555" class="field-text">• updated_at</text>
+  </g>
+
+  <!-- electrician_certifications 表 -->
+  <g id="electrician_certifications">
+    <rect x="320" y="350" width="250" height="240" class="table-box"/>
+    <rect x="320" y="350" width="250" height="30" class="table-header"/>
+    <text x="445" y="370" class="table-title">electrician_certifications</text>
+    <text x="330" y="390" class="field-text pk-field">• id (PK)</text>
+    <text x="330" y="405" class="field-text fk-field">• user_id (FK)</text>
+    <text x="330" y="420" class="field-text">• real_name (真实姓名)</text>
+    <text x="330" y="435" class="field-text">• id_card (身份证号)</text>
+    <text x="330" y="450" class="field-text">• electrician_cert_no</text>
+    <text x="330" y="465" class="field-text">• cert_start_date</text>
+    <text x="330" y="480" class="field-text">• cert_end_date</text>
+    <text x="330" y="495" class="field-text">• status (认证状态)</text>
+    <text x="330" y="510" class="field-text">• reject_reason</text>
+    <text x="330" y="525" class="field-text">• created_at</text>
+    <text x="330" y="540" class="field-text">• updated_at</text>
+  </g>
+
+  <!-- orders 表 -->
+  <g id="orders">
+    <rect x="650" y="80" width="220" height="320" class="table-box"/>
+    <rect x="650" y="80" width="220" height="30" class="table-header"/>
+    <text x="760" y="100" class="table-title">orders (工单表)</text>
+    <text x="660" y="120" class="field-text pk-field">• id (PK)</text>
+    <text x="660" y="135" class="field-text">• order_no (工单编号)</text>
+    <text x="660" y="150" class="field-text fk-field">• user_id (FK)</text>
+    <text x="660" y="165" class="field-text fk-field">• electrician_id (FK)</text>
+    <text x="660" y="180" class="field-text fk-field">• service_type_id (FK)</text>
+    <text x="660" y="195" class="field-text">• title (工单标题)</text>
+    <text x="660" y="210" class="field-text">• description (问题描述)</text>
+    <text x="660" y="225" class="field-text">• images (问题图片)</text>
+    <text x="660" y="240" class="field-text">• contact_name (联系人)</text>
+    <text x="660" y="255" class="field-text">• contact_phone</text>
+    <text x="660" y="270" class="field-text">• service_address</text>
+    <text x="660" y="285" class="field-text">• longitude/latitude</text>
+    <text x="660" y="300" class="field-text">• estimated_amount</text>
+    <text x="660" y="315" class="field-text">• final_amount</text>
+    <text x="660" y="330" class="field-text">• repair_content</text>
+    <text x="660" y="345" class="field-text">• repair_images</text>
+    <text x="660" y="360" class="field-text">• status (工单状态)</text>
+    <text x="660" y="375" class="field-text">• cancel_reason</text>
+    <text x="660" y="390" class="field-text">• 时间字段...</text>
+  </g>
+
+  <!-- service_types 表 -->
+  <g id="service_types">
+    <rect x="920" y="80" width="200" height="180" class="table-box"/>
+    <rect x="920" y="80" width="200" height="30" class="table-header"/>
+    <text x="1020" y="100" class="table-title">service_types</text>
+    <text x="930" y="120" class="field-text pk-field">• id (PK)</text>
+    <text x="930" y="135" class="field-text">• name (服务类型名称)</text>
+    <text x="930" y="150" class="field-text">• description (服务描述)</text>
+    <text x="930" y="165" class="field-text">• icon_url (图标URL)</text>
+    <text x="930" y="180" class="field-text">• sort_order (排序)</text>
+    <text x="930" y="195" class="field-text">• status (状态)</text>
+    <text x="930" y="210" class="field-text">• created_at</text>
+    <text x="930" y="225" class="field-text">• updated_at</text>
+  </g>
+
+  <!-- payments 表 -->
+  <g id="payments">
+    <rect x="650" y="450" width="220" height="220" class="table-box"/>
+    <rect x="650" y="450" width="220" height="30" class="table-header"/>
+    <text x="760" y="470" class="table-title">payments (支付记录表)</text>
+    <text x="660" y="490" class="field-text pk-field">• id (PK)</text>
+    <text x="660" y="505" class="field-text fk-field">• order_id (FK)</text>
+    <text x="660" y="520" class="field-text fk-field">• user_id (FK)</text>
+    <text x="660" y="535" class="field-text">• amount (支付金额)</text>
+    <text x="660" y="550" class="field-text">• payment_method</text>
+    <text x="660" y="565" class="field-text">• transaction_id</text>
+    <text x="660" y="580" class="field-text">• out_trade_no</text>
+    <text x="660" y="595" class="field-text">• status (支付状态)</text>
+    <text x="660" y="610" class="field-text">• paid_at</text>
+    <text x="660" y="625" class="field-text">• created_at</text>
+    <text x="660" y="640" class="field-text">• updated_at</text>
+  </g>
+
+  <!-- reviews 表 -->
+  <g id="reviews">
+    <rect x="920" y="300" width="200" height="200" class="table-box"/>
+    <rect x="920" y="300" width="200" height="30" class="table-header"/>
+    <text x="1020" y="320" class="table-title">reviews (评价表)</text>
+    <text x="930" y="340" class="field-text pk-field">• id (PK)</text>
+    <text x="930" y="355" class="field-text fk-field">• order_id (FK)</text>
+    <text x="930" y="370" class="field-text fk-field">• user_id (FK)</text>
+    <text x="930" y="385" class="field-text fk-field">• electrician_id (FK)</text>
+    <text x="930" y="400" class="field-text">• rating (评分1-5)</text>
+    <text x="930" y="415" class="field-text">• content (评价内容)</text>
+    <text x="930" y="430" class="field-text">• images (评价图片)</text>
+    <text x="930" y="445" class="field-text">• created_at</text>
+    <text x="930" y="460" class="field-text">• updated_at</text>
+  </g>
+
+  <!-- user_addresses 表 -->
+  <g id="user_addresses">
+    <rect x="50" y="650" width="220" height="260" class="table-box"/>
+    <rect x="50" y="650" width="220" height="30" class="table-header"/>
+    <text x="160" y="670" class="table-title">user_addresses</text>
+    <text x="60" y="690" class="field-text pk-field">• id (PK)</text>
+    <text x="60" y="705" class="field-text fk-field">• user_id (FK)</text>
+    <text x="60" y="720" class="field-text">• contact_name (联系人)</text>
+    <text x="60" y="735" class="field-text">• contact_phone</text>
+    <text x="60" y="750" class="field-text">• province (省份)</text>
+    <text x="60" y="765" class="field-text">• city (城市)</text>
+    <text x="60" y="780" class="field-text">• district (区县)</text>
+    <text x="60" y="795" class="field-text">• detail_address</text>
+    <text x="60" y="810" class="field-text">• longitude/latitude</text>
+    <text x="60" y="825" class="field-text">• is_default</text>
+    <text x="60" y="840" class="field-text">• created_at</text>
+    <text x="60" y="855" class="field-text">• updated_at</text>
+  </g>
+
+  <!-- messages 表 -->
+  <g id="messages">
+    <rect x="320" y="650" width="220" height="220" class="table-box"/>
+    <rect x="320" y="650" width="220" height="30" class="table-header"/>
+    <text x="430" y="670" class="table-title">messages (消息表)</text>
+    <text x="330" y="690" class="field-text pk-field">• id (PK)</text>
+    <text x="330" y="705" class="field-text fk-field">• user_id (FK)</text>
+    <text x="330" y="720" class="field-text">• type (消息类型)</text>
+    <text x="330" y="735" class="field-text">• title (消息标题)</text>
+    <text x="330" y="750" class="field-text">• content (消息内容)</text>
+    <text x="330" y="765" class="field-text">• related_id (关联ID)</text>
+    <text x="330" y="780" class="field-text">• is_read (是否已读)</text>
+    <text x="330" y="795" class="field-text">• created_at</text>
+    <text x="330" y="810" class="field-text">• read_at</text>
+  </g>
+
+  <!-- order_status_logs 表 -->
+  <g id="order_status_logs">
+    <rect x="650" y="720" width="220" height="200" class="table-box"/>
+    <rect x="650" y="720" width="220" height="30" class="table-header"/>
+    <text x="760" y="740" class="table-title">order_status_logs</text>
+    <text x="660" y="760" class="field-text pk-field">• id (PK)</text>
+    <text x="660" y="775" class="field-text fk-field">• order_id (FK)</text>
+    <text x="660" y="790" class="field-text">• from_status (原状态)</text>
+    <text x="660" y="805" class="field-text">• to_status (新状态)</text>
+    <text x="660" y="820" class="field-text fk-field">• operator_id (FK)</text>
+    <text x="660" y="835" class="field-text">• operator_type</text>
+    <text x="660" y="850" class="field-text">• remark (备注)</text>
+    <text x="660" y="865" class="field-text">• created_at</text>
+  </g>
+
+  <!-- system_messages 表 -->
+  <g id="system_messages">
+    <rect x="1200" y="80" width="220" height="260" class="table-box"/>
+    <rect x="1200" y="80" width="220" height="30" class="table-header"/>
+    <text x="1310" y="100" class="table-title">system_messages</text>
+    <text x="1210" y="120" class="field-text pk-field">• id (PK)</text>
+    <text x="1210" y="135" class="field-text">• title (通知标题)</text>
+    <text x="1210" y="150" class="field-text">• content (通知内容)</text>
+    <text x="1210" y="165" class="field-text">• target_users</text>
+    <text x="1210" y="180" class="field-text">• type (通知类型)</text>
+    <text x="1210" y="195" class="field-text">• priority (优先级)</text>
+    <text x="1210" y="210" class="field-text">• status (状态)</text>
+    <text x="1210" y="225" class="field-text">• scheduled_at</text>
+    <text x="1210" y="240" class="field-text">• published_at</text>
+    <text x="1210" y="255" class="field-text fk-field">• created_by (FK)</text>
+    <text x="1210" y="270" class="field-text">• created_at</text>
+    <text x="1210" y="285" class="field-text">• updated_at</text>
+  </g>
+
+  <!-- regions 表 -->
+  <g id="regions">
+    <rect x="1200" y="380" width="200" height="180" class="table-box"/>
+    <rect x="1200" y="380" width="200" height="30" class="table-header"/>
+    <text x="1300" y="400" class="table-title">regions (地区表)</text>
+    <text x="1210" y="420" class="field-text pk-field">• id (PK)</text>
+    <text x="1210" y="435" class="field-text">• code (地区编码)</text>
+    <text x="1210" y="450" class="field-text">• name (地区名称)</text>
+    <text x="1210" y="465" class="field-text">• parent_code</text>
+    <text x="1210" y="480" class="field-text">• level (级别)</text>
+    <text x="1210" y="495" class="field-text">• sort_order</text>
+    <text x="1210" y="510" class="field-text">• created_at</text>
+    <text x="1210" y="525" class="field-text">• updated_at</text>
+  </g>
+
+  <!-- system_configs 表 -->
+  <g id="system_configs">
+    <rect x="1200" y="600" width="200" height="160" class="table-box"/>
+    <rect x="1200" y="600" width="200" height="30" class="table-header"/>
+    <text x="1300" y="620" class="table-title">system_configs</text>
+    <text x="1210" y="640" class="field-text pk-field">• id (PK)</text>
+    <text x="1210" y="655" class="field-text">• config_key</text>
+    <text x="1210" y="670" class="field-text">• config_value</text>
+    <text x="1210" y="685" class="field-text">• description</text>
+    <text x="1210" y="700" class="field-text">• created_at</text>
+    <text x="1210" y="715" class="field-text">• updated_at</text>
+  </g>
+
+  <!-- user_message_reads 表 -->
+  <g id="user_message_reads">
+    <rect x="1450" y="80" width="220" height="160" class="table-box"/>
+    <rect x="1450" y="80" width="220" height="30" class="table-header"/>
+    <text x="1560" y="100" class="table-title">user_message_reads</text>
+    <text x="1460" y="120" class="field-text pk-field">• id (PK)</text>
+    <text x="1460" y="135" class="field-text fk-field">• user_id (FK)</text>
+    <text x="1460" y="150" class="field-text fk-field">• message_id (FK)</text>
+    <text x="1460" y="165" class="field-text">• read_at</text>
+    <text x="1460" y="180" class="field-text">• created_at</text>
+    <text x="1460" y="195" class="field-text">• updated_at</text>
+  </g>
+
+  <!-- 关系线 -->
+  
+  <!-- users -> electricians -->
+  <path d="M 150 300 L 150 350" class="relation-line"/>
+  <polygon points="145,345 150,355 155,345" class="relation-arrow"/>
+  
+  <!-- users -> electrician_certifications -->
+  <path d="M 250 190 L 320 190 L 320 405" class="relation-line"/>
+  <polygon points="315,400 320,410 325,400" class="relation-arrow"/>
+  
+  <!-- users -> orders -->
+  <path d="M 250 150 L 650 150" class="relation-line"/>
+  <polygon points="645,145 655,150 645,155" class="relation-arrow"/>
+  
+  <!-- users -> orders (electrician_id) -->
+  <path d="M 250 165 L 650 165" class="relation-line"/>
+  <polygon points="645,160 655,165 645,170" class="relation-arrow"/>
+  
+  <!-- service_types -> orders -->
+  <path d="M 920 180 L 870 180" class="relation-line"/>
+  <polygon points="875,175 865,180 875,185" class="relation-arrow"/>
+  
+  <!-- orders -> payments -->
+  <path d="M 760 400 L 760 450" class="relation-line"/>
+  <polygon points="755,445 760,455 765,445" class="relation-arrow"/>
+  
+  <!-- orders -> reviews -->
+  <path d="M 870 355 L 920 355" class="relation-line"/>
+  <polygon points="915,350 925,355 915,360" class="relation-arrow"/>
+  
+  <!-- orders -> order_status_logs -->
+  <path d="M 760 400 L 760 720" class="relation-line"/>
+  <polygon points="755,715 760,725 765,715" class="relation-arrow"/>
+  
+  <!-- users -> user_addresses -->
+  <path d="M 150 300 L 150 650" class="relation-line"/>
+  <polygon points="145,645 150,655 155,645" class="relation-arrow"/>
+  
+  <!-- users -> messages -->
+  <path d="M 150 300 L 150 600 L 430 600 L 430 650" class="relation-line"/>
+  <polygon points="425,645 430,655 435,645" class="relation-arrow"/>
+  
+  <!-- users -> payments -->
+  <path d="M 250 200 L 600 200 L 600 520 L 650 520" class="relation-line"/>
+  <polygon points="645,515 655,520 645,525" class="relation-arrow"/>
+  
+  <!-- users -> reviews (user_id) -->
+  <path d="M 250 180 L 580 180 L 580 370 L 920 370" class="relation-line"/>
+  <polygon points="915,365 925,370 915,375" class="relation-arrow"/>
+  
+  <!-- users -> reviews (electrician_id) -->
+  <path d="M 250 195 L 590 195 L 590 385 L 920 385" class="relation-line"/>
+  <polygon points="915,380 925,385 915,390" class="relation-arrow"/>
+  
+  <!-- users -> order_status_logs -->
+  <path d="M 250 210 L 610 210 L 610 820 L 650 820" class="relation-line"/>
+  <polygon points="645,815 655,820 645,825" class="relation-arrow"/>
+  
+  <!-- admins -> system_messages -->
+  <path d="M 500 255 L 1200 255" class="relation-line"/>
+  <polygon points="1195,250 1205,255 1195,260" class="relation-arrow"/>
+
+  <!-- 图例 -->
+  <g id="legend">
+    <rect x="1450" y="300" width="300" height="120" fill="none" stroke="#333" stroke-width="1"/>
+    <text x="1600" y="320" class="table-title" style="fill: #333;">图例说明</text>
+    <text x="1460" y="340" class="field-text pk-field">• PK - 主键 (Primary Key)</text>
+    <text x="1460" y="355" class="field-text fk-field">• FK - 外键 (Foreign Key)</text>
+    <line x1="1460" y1="370" x2="1480" y2="370" class="relation-line"/>
+    <text x="1490" y="375" class="field-text">关系线表示外键关联</text>
+    <polygon points="1475,365 1485,370 1475,375" class="relation-arrow"/>
+    <text x="1460" y="395" class="field-text" style="font-size: 10px;">箭头指向被引用的表</text>
+  </g>
+
+</svg>
