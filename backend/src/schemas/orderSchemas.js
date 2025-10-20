@@ -146,19 +146,17 @@ const getOrderDetail = Joi.object({
 
 // 完成工单的验证Schema
 const completeOrder = Joi.object({
-  repair_content: Joi.string().min(5).max(1000).required()
+  repair_content: Joi.string().min(5).max(1000).optional()
     .messages({
-      'any.required': '维修内容是必填项',
       'string.min': '维修内容至少需要5个字符',
       'string.max': '维修内容不能超过1000个字符'
     }),
-  final_amount: Joi.number().positive().required()
+  completion_note: Joi.string().min(5).max(1000).optional()
     .messages({
-      'any.required': '最终金额是必填项',
-      'number.base': '最终金额必须是数字',
-      'number.positive': '最终金额必须是正数'
+      'string.min': '完成说明至少需要5个字符',
+      'string.max': '完成说明不能超过1000个字符'
     }),
-  repair_images: Joi.array().items(Joi.string().uri()).max(9).default([])
+  repair_images: Joi.array().items(Joi.string()).max(9).default([])
     .messages({
       'array.max': '最多上传9张图片'
     })
@@ -217,11 +215,10 @@ const initiateCancelOrder = Joi.object({
 
 // 订单取消确认的验证Schema
 const confirmCancelOrder = Joi.object({
-  confirmed: Joi.boolean().valid(true).required()
+  cancel_reason: Joi.string().max(500).required()
     .messages({
-      'any.required': '确认状态是必填项',
-      'boolean.base': '确认状态必须是布尔值',
-      'any.only': '确认状态必须为true'
+      'any.required': '取消原因是必填项',
+      'string.max': '取消原因最多500字符'
     })
 });
 

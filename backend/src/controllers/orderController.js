@@ -365,7 +365,16 @@ class OrderController {
   static async completeOrder(req, res, next) {
     try {
       const { id } = req.params;
-      const { repair_content, final_amount, repair_images = [] } = req.body;
+      // 兼容两种参数名称
+      const repair_content = req.body.repair_content || req.body.completion_note || null;
+      
+      // 处理图片参数，确保是数组
+      let repair_images = [];
+      if (req.body.repair_images && Array.isArray(req.body.repair_images)) {
+        repair_images = req.body.repair_images;
+      } else if (req.body.completion_images && Array.isArray(req.body.completion_images)) {
+        repair_images = req.body.completion_images;
+      }
       const electricianId = req.user.id;
       const now = new Date();
 
@@ -394,21 +403,31 @@ class OrderController {
       // 使用事务更新工单状态
       await sequelize.transaction(async (t) => {
         // 更新工单
-        await order.update({
+        const updateData = {
           status: 'completed',
-          completed_at: now,
-          repair_content,
-          final_amount: parseFloat(final_amount),
-          repair_images: JSON.stringify(repair_images)
-        }, { transaction: t });
+          completed_at: now
+        };
+        
+        // 只有当提供了维修内容时才更新
+        if (repair_content !== null) {
+          updateData.repair_content = repair_content;
+        }
+        
+        // 只有当提供了维修图片时才更新
+        if (repair_images.length > 0) {
+          updateData.repair_images = JSON.stringify(repair_images);
+        }
+        
+        await order.update(updateData, { transaction: t });
 
         // 创建状态日志
         await OrderStatusLog.create({
           order_id: order.id,
-          status: 'completed',
+          from_status: order.status,
+          to_status: 'completed',
           operator_id: electricianId,
-          operator_role: 'electrician',
-          remark: `电工完成服务，最终金额: ¥${final_amount}`,
+          operator_type: 'electrician',
+          remark: '电工完成服务',
           created_at: now
         }, { transaction: t });
 
@@ -416,7 +435,7 @@ class OrderController {
         await Message.create({
           user_id: order.user_id,
           title: '工单已完成',
-          content: `您的工单 ${order.order_no} 已由电工完成服务，请确认并支付`,
+          content: `您的工单 ${order.order_no} 已由电工完成服务，请确认`,
           type: 'order',
           reference_id: order.id,
           is_read: false,
@@ -619,8 +638,8 @@ class OrderController {
       }
       
       // 验证工单状态
-      if (order.status !== 'in_progress') {
-        return res.error('只有进行中状态的工单可以修改', 400);
+      if (order.status !== 'in_progress' && order.status !== 'accepted') {
+        return res.error('只有已接单或进行中状态的工单可以修改', 400);
       }
       
       // 开始事务
@@ -635,7 +654,6 @@ class OrderController {
         
         // 标记为需要用户确认
         updateData.needs_confirmation = true;
-        updateData.last_modified_at = new Date();
         
         await order.update(updateData, { transaction });
         
@@ -699,8 +717,8 @@ class OrderController {
       }
       
       // 验证工单状态
-      if (order.status !== 'in_progress') {
-        return res.error('只有进行中状态的工单可以确认修改', 400);
+      if (order.status !== 'in_progress' && order.status !== 'accepted') {
+        return res.error('只有已接单或进行中状态的工单可以确认修改', 400);
       }
       
       // 验证是否需要确认
@@ -785,12 +803,17 @@ class OrderController {
       }
       
       // 验证工单状态
-      if (order.status !== 'in_progress') {
-        return res.error('只有进行中状态的工单可以发起取消', 400);
+      // 用户可以取消待接单、已接单和进行中的订单，电工可以取消已接单和进行中的订单
+      if (req.user.current_role === 'user') {
+        if (order.status !== 'pending' && order.status !== 'accepted' && order.status !== 'in_progress') {
+          return res.error('只有待接单、已接单或进行中状态的工单可以发起取消', 400);
+        }
+      } else if (order.status !== 'accepted' && order.status !== 'in_progress') {
+        return res.error('只有已接单或进行中状态的工单可以发起取消', 400);
       }
       
       // 检查是否已经有取消请求
-      if (order.cancel_initiated) {
+      if (order.status === 'cancel_pending') {
         return res.error('该工单已有取消请求，等待对方确认', 400);
       }
       
@@ -798,32 +821,60 @@ class OrderController {
       const transaction = await sequelize.transaction();
       
       try {
-        // 更新工单状态
-        await order.update({
-          cancel_initiated: true,
-          cancel_initiator: req.user.current_role,
-          cancel_reason: reason,
-          cancel_initiated_at: new Date()
-        }, { transaction });
-        
-        // 记录状态变更日志
-        await OrderStatusLog.create({
-          order_id: order.id,
-          from_status: 'in_progress',
-          to_status: 'in_progress',
-          operator_id: req.user.id,
-          operator_type: req.user.current_role,
-          operator_role: req.user.current_role,
-          remark: `${req.user.current_role === 'user' ? '用户' : '电工'}发起取消订单请求：${reason}`
-        }, { transaction });
-        
-        // 提交事务
-        await transaction.commit();
-        
-        return res.success({
-          message: '取消订单请求已发起，等待对方确认',
-          order_id: order.id
-        });
+        // 如果是用户取消待接单状态的订单，直接取消
+        if (req.user.current_role === 'user' && order.status === 'pending') {
+          // 直接更新为已取消状态
+          await order.update({
+            status: 'cancelled',
+            cancel_reason: reason,
+            cancelled_at: new Date()
+          }, { transaction });
+          
+          // 记录状态变更日志
+          await OrderStatusLog.create({
+            order_id: order.id,
+            from_status: order.status,
+            to_status: 'cancelled',
+            operator_id: req.user.id,
+            operator_type: req.user.current_role,
+            remark: `${req.user.current_role === 'user' ? '用户' : '电工'}取消了待接单状态的订单：${reason}`
+          }, { transaction });
+          
+          // 提交事务
+          await transaction.commit();
+          
+          return res.success({
+            message: '订单已取消',
+            order_id: order.id
+          });
+        } else {
+          // 已接单或进行中状态需要发起取消请求
+          await order.update({
+            status: 'cancel_pending',
+            cancel_initiator_id: req.user.id,
+            cancel_reason: reason,
+            cancel_initiated_at: new Date(),
+            cancel_confirm_status: 'pending'
+          }, { transaction });
+          
+          // 记录状态变更日志
+          await OrderStatusLog.create({
+            order_id: order.id,
+            from_status: order.status,
+            to_status: order.status,
+            operator_id: req.user.id,
+            operator_type: req.user.current_role,
+            remark: `${req.user.current_role === 'user' ? '用户' : '电工'}发起取消订单请求：${reason}`
+          }, { transaction });
+          
+          // 提交事务
+          await transaction.commit();
+          
+          return res.success({
+            message: '取消订单请求已发起，等待对方确认',
+            order_id: order.id
+          });
+        }
       } catch (error) {
         // 回滚事务
         await transaction.rollback();
@@ -845,6 +896,7 @@ class OrderController {
   static async confirmCancelOrder(req, res, next) {
     try {
       const { id } = req.params;
+      const { cancel_reason } = req.body;
       
       // 确保用户已登录
       if (!req.user) {
@@ -872,17 +924,12 @@ class OrderController {
       }
       
       // 验证工单状态
-      if (order.status !== 'in_progress') {
-        return res.error('只有进行中状态的工单可以确认取消', 400);
-      }
-      
-      // 检查是否有取消请求
-      if (!order.cancel_initiated) {
-        return res.error('该工单没有待确认的取消请求', 400);
+      if (order.status !== 'cancel_pending') {
+        return res.error('只有处于待确认取消状态的工单可以确认取消', 400);
       }
       
       // 验证确认方不是发起方
-      if (order.cancel_initiator === req.user.current_role) {
+      if (order.cancel_initiator_id === req.user.id) {
         return res.error('您是取消请求的发起方，无需再次确认', 400);
       }
       
@@ -891,12 +938,14 @@ class OrderController {
       
       try {
         // 更新工单状态为已取消
-        await order.update({
-          status: 'cancelled',
-          cancel_confirmed: true,
-          cancel_confirmed_at: new Date(),
-          cancel_confirmer: req.user.current_role
-        }, { transaction });
+      await order.update({
+        status: 'cancelled',
+        cancel_confirm_status: 'confirmed',
+        cancel_confirmed_at: new Date(),
+        cancel_confirmer_id: req.user.id,
+        cancel_reason: cancel_reason || order.cancel_reason, // 使用传入的取消原因或保留原有原因
+        cancelled_at: new Date() // 设置取消时间
+      }, { transaction });
         
         // 记录状态变更日志
         await OrderStatusLog.create({
@@ -906,7 +955,7 @@ class OrderController {
           operator_id: req.user.id,
           operator_type: req.user.current_role,
           operator_role: req.user.current_role,
-          remark: `${req.user.current_role === 'user' ? '用户' : '电工'}确认取消订单`
+          remark: `${req.user.current_role === 'user' ? '用户' : '电工'}确认取消订单：${cancel_reason}`
         }, { transaction });
         
         // 提交事务

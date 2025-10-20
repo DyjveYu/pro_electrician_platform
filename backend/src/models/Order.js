@@ -114,7 +114,7 @@ const Order = sequelize.define('Order', {
   },
   
   status: {
-    type: DataTypes.ENUM('pending', 'accepted', 'in_progress', 'completed', 'paid', 'cancelled'),
+    type: DataTypes.ENUM('pending', 'accepted', 'in_progress', 'completed', 'paid', 'cancelled', 'cancel_pending'),
     defaultValue: 'pending',
     comment: '工单状态'
   },
@@ -123,6 +123,36 @@ const Order = sequelize.define('Order', {
     type: DataTypes.TEXT,
     allowNull: true,
     comment: '取消原因'
+  },
+  
+  cancel_initiator_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: '取消请求发起人ID'
+  },
+  
+  cancel_initiated_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: '取消请求发起时间'
+  },
+  
+  cancel_confirm_status: {
+    type: DataTypes.ENUM('pending', 'confirmed', 'rejected', 'no_confirm_req'),
+    allowNull: true,
+    comment: '取消确认状态'
+  },
+  
+  cancel_confirmer_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: '取消请求确认人ID'
+  },
+  
+  cancel_confirmed_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: '取消请求确认时间'
   },
   
   accepted_at: {
@@ -147,6 +177,12 @@ const Order = sequelize.define('Order', {
     type: DataTypes.DATE,
     allowNull: true,
     comment: '取消时间'
+  },
+  
+  needs_confirmation: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    comment: '是否需要用户确认修改'
   }
   
 }, {
