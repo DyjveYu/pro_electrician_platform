@@ -45,7 +45,7 @@ app.use(rateLimiter());
 // API路由
 app.use('/api/auth', authRoutes);
 app.use('/api/orders', orderRoutes);
-// app.use('/api/payments', paymentRoutes);
+app.use('/api/payments', paymentRoutes);
 // app.use('/api/v1/reviews', reviewRoutes);
 app.use('/api/addresses', addressRoutes);
 app.use('/api/messages', messageRoutes);
