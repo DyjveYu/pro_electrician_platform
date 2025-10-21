@@ -99,4 +99,35 @@ Address.getById = async function(id) {
   return await this.findByPk(id);
 };
 
+/**
+ * 根据用户ID获取地址列表
+ * @param {number} userId - 用户ID
+ * @param {number} page - 页码，默认为1
+ * @param {number} limit - 每页数量，默认为10
+ * @returns {Promise<Address[]>} - 返回地址列表
+ */
+Address.getByUserId = async function(userId, page = 1, limit = 10) {
+  const offset = (page - 1) * limit;
+  return await this.findAll({
+    where: { user_id: userId },
+    order: [
+      ['is_default', 'DESC'],
+      ['createdAt', 'DESC']
+    ],
+    limit,
+    offset
+  });
+};
+
+/**
+ * 获取用户地址总数
+ * @param {number} userId - 用户ID
+ * @returns {Promise<number>} - 返回地址总数
+ */
+Address.getCountByUserId = async function(userId) {
+  return await this.count({
+    where: { user_id: userId }
+  });
+};
+
 module.exports = Address;
