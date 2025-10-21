@@ -162,12 +162,29 @@ class AddressController {
         return res.error('无权修改此地址', 403);
       }
 
+      // 转换字段名为数据库字段名
+      const dbUpdateData = {
+        contact_name: updateData.contactName || updateData.contact_name,
+        contact_phone: updateData.contactPhone || updateData.contact_phone,
+        province: updateData.province,
+        city: updateData.city,
+        district: updateData.district,
+        detail_address: updateData.detailAddress || updateData.detail,
+        longitude: updateData.longitude || null,
+        latitude: updateData.latitude || null,
+        is_default: updateData.isDefault === true || 
+                    updateData.is_default === true || 
+                    updateData.isDefault === "true" || 
+                    updateData.is_default === "true" || 
+                    false
+      };
+
       // 如果设置为默认地址，先清除其他默认地址
-      if (updateData.is_default) {
+      if (dbUpdateData.is_default) {
         await Address.clearDefaultByUserId(userId);
       }
 
-      const success = await Address.update(parseInt(id), updateData);
+      const success = await Address.updateById(parseInt(id), dbUpdateData);
       
       if (success) {
         const updatedAddress = await Address.getById(parseInt(id));

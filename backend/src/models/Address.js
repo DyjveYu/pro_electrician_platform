@@ -100,6 +100,68 @@ Address.getById = async function(id) {
 };
 
 /**
+ * 设置默认地址
+ * @param {number} id - 要设置为默认的地址ID
+ * @param {number} userId - 用户ID
+ * @returns {Promise<boolean>} - 返回操作是否成功
+ */
+Address.setDefault = async function(id, userId) {
+  try {
+    // 开启事务
+    const transaction = await sequelize.transaction();
+    
+    try {
+      // 1. 先将该用户的所有地址设为非默认
+      await this.update(
+        { is_default: false },
+        { 
+          where: { user_id: userId },
+          transaction
+        }
+      );
+      
+      // 2. 将指定地址设为默认
+      const [affectedRows] = await this.update(
+        { is_default: true },
+        { 
+          where: { id, user_id: userId },
+          transaction
+        }
+      );
+      
+      // 提交事务
+      await transaction.commit();
+      
+      return affectedRows > 0;
+    } catch (error) {
+      // 回滚事务
+      await transaction.rollback();
+      throw error;
+    }
+  } catch (error) {
+    console.error('设置默认地址失败:', error);
+    return false;
+  }
+};
+
+/**
+ * 删除地址
+ * @param {number} id - 地址ID
+ * @returns {Promise<boolean>} - 返回操作是否成功
+ */
+Address.delete = async function(id) {
+  try {
+    const result = await this.destroy({
+      where: { id }
+    });
+    return result > 0;
+  } catch (error) {
+    console.error('删除地址失败:', error);
+    return false;
+  }
+};
+
+/**
  * 根据用户ID获取地址列表
  * @param {number} userId - 用户ID
  * @param {number} page - 页码，默认为1
@@ -112,7 +174,7 @@ Address.getByUserId = async function(userId, page = 1, limit = 10) {
     where: { user_id: userId },
     order: [
       ['is_default', 'DESC'],
-      ['createdAt', 'DESC']
+      ['created_at', 'DESC']
     ],
     limit,
     offset
@@ -128,6 +190,43 @@ Address.getCountByUserId = async function(userId) {
   return await this.count({
     where: { user_id: userId }
   });
+};
+
+/**
+ * 清除用户的所有默认地址
+ * @param {number} userId - 用户ID
+ * @returns {Promise<boolean>} - 返回操作是否成功
+ */
+Address.clearDefaultByUserId = async function(userId) {
+  try {
+    await this.update(
+      { is_default: false },
+      { where: { user_id: userId, is_default: true } }
+    );
+    return true;
+  } catch (error) {
+    console.error('清除默认地址失败:', error);
+    return false;
+  }
+};
+
+/**
+ * 更新地址信息
+ * @param {number} id - 地址ID
+ * @param {Object} updateData - 更新数据
+ * @returns {Promise<boolean>} - 返回操作是否成功
+ */
+Address.updateById = async function(id, updateData) {
+  try {
+    const [affectedRows] = await this.update(
+      updateData,
+      { where: { id } }
+    );
+    return affectedRows > 0;
+  } catch (error) {
+    console.error('更新地址失败:', error);
+    return false;
+  }
 };
 
 module.exports = Address;
