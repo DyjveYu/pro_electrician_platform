@@ -8,7 +8,7 @@ const schemas = require('../schemas/messageSchemas');
 // 获取用户消息列表
 router.get('/',
   authenticateToken,
-  validate(schemas.getMessages),
+  validate(schemas.getMessages, 'query'),
   MessageController.getMessages
 );
 
