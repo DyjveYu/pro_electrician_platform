@@ -15,14 +15,14 @@ router.get('/',
 // 获取消息详情
 router.get('/:id',
   authenticateToken,
-  validate(schemas.getMessageDetail),
+  validate(schemas.getMessageDetail, 'params'),
   MessageController.getMessageDetail
 );
 
 // 标记消息为已读
 router.put('/:id/read',
   authenticateToken,
-  validate(schemas.markAsRead),
+  validate(schemas.markAsRead, 'params'),
   MessageController.markAsRead
 );
 

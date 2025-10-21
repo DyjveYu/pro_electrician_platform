@@ -109,6 +109,23 @@ Message.belongsTo(User, {
   as: 'user'
 });
 
+// 10. SystemMessage - User (通过 UserMessageRead)
+const UserMessageRead = require('./UserMessageRead');
+
+SystemMessage.belongsToMany(User, {
+  through: UserMessageRead,
+  foreignKey: 'message_id',
+  otherKey: 'user_id',
+  as: 'readUsers'
+});
+
+User.belongsToMany(SystemMessage, {
+  through: UserMessageRead,
+  foreignKey: 'user_id',
+  otherKey: 'message_id',
+  as: 'readMessages'
+});
+
 // 导出所有模型和sequelize实例
 module.exports = {
   sequelize,
@@ -122,5 +139,7 @@ module.exports = {
   ServiceType,
   SystemMessage,
   OrderStatusLog,
-  Admin
+  Admin,
+  UserMessageRead,
+  Sequelize: require('sequelize')
 };

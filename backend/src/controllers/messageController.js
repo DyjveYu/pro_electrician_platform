@@ -1,171 +1,272 @@
-const { query } = require('../config/database');
+const { SystemMessage, UserMessageRead, User, Sequelize } = require('../models');
+const { Op } = Sequelize;
+const AppError = require('../utils/AppError');
 
 class MessageController {
   /**
    * 获取用户消息列表
+   * @param {Object} req - 请求对象
+   * @param {Object} res - 响应对象
+   * @param {Function} next - 下一个中间件函数
    */
-  static async getMessages(req, res) {
+  static async getMessages(req, res, next) {
     try {
       const { page = 1, limit = 20, type = '' } = req.query;
       const userId = req.user.id;
-      const offset = (page - 1) * limit;
+      
+      // 确保转换为数字类型
+      const numPage = parseInt(page);
+      const numLimit = parseInt(limit);
+      const numOffset = (numPage - 1) * numLimit;
+      
+      // 构建查询条件
+      const whereConditions = {
+        status: 'published',
+        [Op.or]: [
+          { target_users: 'all' },
+          { target_users: 'users' },
+          { target_users: 'electricians' }
+        ]
+      };
 
-      let whereClause = 'WHERE (target_users = "all" OR FIND_IN_SET(?, target_users)) AND status = "published"';
-      const params = [userId];
-
+      // 根据消息类型筛选
       if (type && type.trim() !== '') {
         if (type === 'order') {
           // 订单通知使用urgent类型
-          whereClause += ' AND type = ?';
-          params.push('urgent');
+          whereConditions.type = 'urgent';
         } else if (type === 'system') {
           // 系统通知包含system、maintenance、activity类型
-          whereClause += ' AND type IN (?, ?, ?)';
-          params.push('system', 'maintenance', 'activity');
+          whereConditions.type = {
+            [Op.in]: ['system', 'maintenance', 'activity']
+          };
         }
       }
 
-      // 获取消息列表
-      const messages = await query(
-        `SELECT sm.*, 
-                CASE WHEN umr.user_id IS NOT NULL THEN 1 ELSE 0 END as is_read
-         FROM system_messages sm
-         LEFT JOIN user_message_reads umr ON sm.id = umr.message_id AND umr.user_id = ?
-         ${whereClause}
-         ORDER BY sm.created_at DESC
-         LIMIT ? OFFSET ?`,
-        [userId, ...params, parseInt(limit), parseInt(offset)]
-      );
+      // 使用Sequelize执行查询
+      const { count, rows } = await SystemMessage.findAndCountAll({
+        where: whereConditions,
+        include: [{
+          model: User,
+          as: 'readUsers',
+          attributes: [],
+          through: {
+            attributes: []
+          },
+          where: {
+            id: userId
+          },
+          required: false
+        }],
+        order: [['created_at', 'DESC']],
+        limit: numLimit,
+        offset: numOffset,
+        subQuery: false
+      });
 
-      // 获取总数
-      const countResult = await query(
-        `SELECT COUNT(*) as total
-         FROM system_messages sm
-         ${whereClause}`,
-        params
-      );
+      // 处理消息列表，添加is_read属性
+      const messages = await Promise.all(rows.map(async (message) => {
+        const messageObj = message.toJSON();
+        
+        // 查询该消息是否已读
+        const readRecord = await UserMessageRead.findOne({
+          where: {
+            user_id: userId,
+            message_id: message.id
+          },
+          attributes: ['id']
+        });
+        
+        return {
+          ...messageObj,
+          is_read: readRecord ? 1 : 0
+        };
+      }));
 
-      const total = countResult[0].total;
-      const totalPages = Math.ceil(total / limit);
+      const totalPages = Math.ceil(count / numLimit);
 
       res.success({
         messages,
         pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          total,
+          page: numPage,
+          limit: numLimit,
+          total: count,
           totalPages,
-          hasMore: page < totalPages
+          hasMore: numPage < totalPages
         }
       });
     } catch (error) {
-      console.error('获取消息列表错误:', error);
-      res.error('获取消息列表失败');
+      next(error);
     }
   }
 
   /**
    * 获取消息详情
+   * @param {Object} req - 请求对象
+   * @param {Object} res - 响应对象
+   * @param {Function} next - 下一个中间件函数
    */
-  static async getMessageDetail(req, res) {
+  static async getMessageDetail(req, res, next) {
     try {
       const { id } = req.params;
       const userId = req.user.id;
 
-      const messages = await query(
-        `SELECT sm.*, 
-                CASE WHEN umr.user_id IS NOT NULL THEN 1 ELSE 0 END as is_read
-         FROM system_messages sm
-         LEFT JOIN user_message_reads umr ON sm.id = umr.message_id AND umr.user_id = ?
-         WHERE sm.id = ? AND (sm.target_users = "all" OR FIND_IN_SET(?, sm.target_users)) AND sm.status = "published"`,
-        [userId, id, userId]
-      );
+      // 使用Sequelize查询
+      const messageData = await SystemMessage.findOne({
+        where: {
+          id,
+          status: 'published',
+          [Op.or]: [
+            { target_users: 'all' },
+            { target_users: 'users' },
+            { target_users: 'electricians' }
+          ]
+        },
+        include: [{
+          model: User,
+          as: 'readUsers',
+          attributes: [],
+          through: {
+            attributes: []
+          },
+          where: {
+            id: userId
+          },
+          required: false
+        }]
+      });
 
-      if (messages.length === 0) {
-        return res.error('消息不存在', 404);
+      if (!messageData) {
+        throw new AppError('消息不存在', 404);
       }
 
-      res.success(messages[0]);
+      // 查询该消息是否已读
+      const readRecord = await UserMessageRead.findOne({
+        where: {
+          user_id: userId,
+          message_id: id
+        },
+        attributes: ['id']
+      });
+
+      // 构建返回数据
+      const message = {
+        ...messageData.toJSON(),
+        is_read: readRecord ? 1 : 0
+      };
+
+      res.success(message);
     } catch (error) {
-      console.error('获取消息详情错误:', error);
-      res.error('获取消息详情失败');
+      next(error);
     }
   }
 
   /**
    * 标记消息为已读
+   * @param {Object} req - 请求对象
+   * @param {Object} res - 响应对象
+   * @param {Function} next - 下一个中间件函数
    */
-  static async markAsRead(req, res) {
+  static async markAsRead(req, res, next) {
     try {
       const { id } = req.params;
       const userId = req.user.id;
 
       // 检查消息是否存在
-      const messages = await query(
-        'SELECT id FROM system_messages WHERE id = ? AND (target_users = "all" OR FIND_IN_SET(?, target_users)) AND status = "published"',
-        [id, userId]
-      );
+      const message = await SystemMessage.findOne({
+        where: {
+          id,
+          status: 'published',
+          [Op.or]: [
+            { target_users: 'all' },
+            { target_users: 'users' },
+            { target_users: 'electricians' }
+          ]
+        }
+      });
 
-      if (messages.length === 0) {
-        return res.error('消息不存在', 404);
+      if (!message) {
+        throw new AppError('消息不存在', 404);
       }
 
-      // 插入或更新已读记录
-      await query(
-        'INSERT INTO user_message_reads (user_id, message_id, read_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE read_at = NOW()',
-        [userId, id]
-      );
+      // 检查是否已标记为已读
+      const [readRecord, created] = await UserMessageRead.findOrCreate({
+        where: {
+          user_id: userId,
+          message_id: id
+        },
+        defaults: {
+          read_at: new Date()
+        }
+      });
 
-      res.success({ message: '标记已读成功' });
+      res.success({ message: '消息已标记为已读' });
     } catch (error) {
-      console.error('标记已读错误:', error);
-      res.error('标记已读失败');
+      next(error);
     }
   }
 
   /**
    * 获取未读消息数量
+   * @param {Object} req - 请求对象
+   * @param {Object} res - 响应对象
+   * @param {Function} next - 下一个中间件函数
    */
-  static async getUnreadCount(req, res) {
+  static async getUnreadCount(req, res, next) {
     try {
       const userId = req.user.id;
 
-      // 获取订单通知未读数量（使用urgent类型）
-      const orderUnreadResult = await query(
-        `SELECT COUNT(*) as count
-         FROM system_messages sm
-         LEFT JOIN user_message_reads umr ON sm.id = umr.message_id AND umr.user_id = ?
-         WHERE (sm.target_users = "all" OR FIND_IN_SET(?, sm.target_users)) 
-               AND sm.status = "published" 
-               AND sm.type = "urgent"
-               AND umr.user_id IS NULL`,
-        [userId, userId]
-      );
+      // 获取用户已读消息ID列表
+      const readMessageIds = await UserMessageRead.findAll({
+        where: { user_id: userId },
+        attributes: ['message_id'],
+        raw: true
+      }).then(reads => reads.map(read => read.message_id));
 
-      // 获取系统通知未读数量（包含system、maintenance、activity类型）
-      const systemUnreadResult = await query(
-        `SELECT COUNT(*) as count
-         FROM system_messages sm
-         LEFT JOIN user_message_reads umr ON sm.id = umr.message_id AND umr.user_id = ?
-         WHERE (sm.target_users = "all" OR FIND_IN_SET(?, sm.target_users)) 
-               AND sm.status = "published" 
-               AND sm.type IN ("system", "maintenance", "activity")
-               AND umr.user_id IS NULL`,
-        [userId, userId]
-      );
+      // 查询订单通知未读数量
+      const orderUnreadCount = await SystemMessage.count({
+        where: {
+          status: 'published',
+          type: 'urgent',
+          [Op.or]: [
+            { target_users: 'all' },
+            { target_users: 'users' },
+            { target_users: 'electricians' }
+          ],
+          ...(readMessageIds.length > 0 ? {
+            id: {
+              [Op.notIn]: readMessageIds
+            }
+          } : {})
+        }
+      });
 
-      const orderUnread = orderUnreadResult[0].count;
-      const systemUnread = systemUnreadResult[0].count;
-      const totalUnread = orderUnread + systemUnread;
+      // 查询系统通知未读数量
+      const systemUnreadCount = await SystemMessage.count({
+        where: {
+          status: 'published',
+          type: {
+            [Op.in]: ['system', 'maintenance', 'activity']
+          },
+          [Op.or]: [
+            { target_users: 'all' },
+            { target_users: 'users' },
+            { target_users: 'electricians' }
+          ],
+          ...(readMessageIds.length > 0 ? {
+            id: {
+              [Op.notIn]: readMessageIds
+            }
+          } : {})
+        }
+      });
 
       res.success({
-        order: orderUnread,
-        system: systemUnread,
-        total: totalUnread
-      });
+         orderUnreadCount,
+         systemUnreadCount,
+         totalUnreadCount: orderUnreadCount + systemUnreadCount
+        });
     } catch (error) {
-      console.error('获取未读消息数量错误:', error);
-      res.error('获取未读消息数量失败');
+      next(error);
     }
   }
 }
