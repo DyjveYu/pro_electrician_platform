@@ -85,4 +85,18 @@ const Address = sequelize.define('Address', {
   ]
 });
 
+/**
+ * 根据ID获取地址
+ * @param {number|Object} id - 地址ID或地址对象
+ * @returns {Promise<Address|null>} - 返回地址对象或null
+ */
+Address.getById = async function(id) {
+  // 如果传入的是地址对象，直接返回
+  if (typeof id === 'object' && id !== null) {
+    return id;
+  }
+  // 否则通过ID查询
+  return await this.findByPk(id);
+};
+
 module.exports = Address;

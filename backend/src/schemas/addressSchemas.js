@@ -19,16 +19,24 @@ const addressSchemas = {
   // 创建地址
   createAddress: {
     body: Joi.object({
-      contactName: Joi.string().trim().min(1).max(50).required()
+      // 支持驼峰命名和下划线命名
+      contactName: Joi.string().trim().min(1).max(50)
         .messages({
           'string.empty': '联系人姓名不能为空',
-          'string.max': '联系人姓名不能超过50个字符',
-          'any.required': '联系人姓名是必填项'
+          'string.max': '联系人姓名不能超过50个字符'
         }),
-      contactPhone: Joi.string().pattern(/^1[3-9]\d{9}$/).required()
+      contact_name: Joi.string().trim().min(1).max(50)
         .messages({
-          'string.pattern.base': '请输入正确的手机号码',
-          'any.required': '联系电话是必填项'
+          'string.empty': '联系人姓名不能为空',
+          'string.max': '联系人姓名不能超过50个字符'
+        }),
+      contactPhone: Joi.string().pattern(/^1[3-9]\d{9}$/)
+        .messages({
+          'string.pattern.base': '请输入正确的手机号码'
+        }),
+      contact_phone: Joi.string().pattern(/^1[3-9]\d{9}$/)
+        .messages({
+          'string.pattern.base': '请输入正确的手机号码'
         }),
       province: Joi.string().trim().min(1).max(50).required()
         .messages({
@@ -48,11 +56,15 @@ const addressSchemas = {
           'string.max': '区县名称不能超过50个字符',
           'any.required': '区县是必填项'
         }),
-      detailAddress: Joi.string().trim().min(1).max(255).required()
+      detailAddress: Joi.string().trim().min(1).max(255)
         .messages({
           'string.empty': '详细地址不能为空',
-          'string.max': '详细地址不能超过255个字符',
-          'any.required': '详细地址是必填项'
+          'string.max': '详细地址不能超过255个字符'
+        }),
+      detail: Joi.string().trim().min(1).max(255)
+        .messages({
+          'string.empty': '详细地址不能为空',
+          'string.max': '详细地址不能超过255个字符'
         }),
       longitude: Joi.number().min(-180).max(180).allow(null).default(null)
         .messages({
@@ -64,8 +76,15 @@ const addressSchemas = {
           'number.min': '纬度值无效',
           'number.max': '纬度值无效'
         }),
-      isDefault: Joi.boolean().default(false)
+      isDefault: Joi.boolean().default(false),
+      is_default: Joi.alternatives().try(
+        Joi.boolean(),
+        Joi.string().valid('true', 'false')
+      ).default(false)
     })
+    .or('contactName', 'contact_name')
+    .or('contactPhone', 'contact_phone')
+    .or('detailAddress', 'detail')
   },
 
   // 更新地址

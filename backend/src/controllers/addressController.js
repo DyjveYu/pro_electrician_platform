@@ -91,15 +91,20 @@ class AddressController {
       // 转换字段名为数据库字段名
       const dbAddressData = {
         user_id: userId,
-        contact_name: addressData.contactName,
-        contact_phone: addressData.contactPhone,
+        contact_name: addressData.contactName || addressData.contact_name,
+        contact_phone: addressData.contactPhone || addressData.contact_phone,
         province: addressData.province,
         city: addressData.city,
         district: addressData.district,
-        detail_address: addressData.detailAddress,
+        detail_address: addressData.detailAddress || addressData.detail,
         longitude: addressData.longitude || null,
         latitude: addressData.latitude || null,
-        is_default: addressData.isDefault || false
+        // 转换字符串 "true" 为布尔值
+        is_default: addressData.isDefault === true || 
+                    addressData.is_default === true || 
+                    addressData.isDefault === "true" || 
+                    addressData.is_default === "true" || 
+                    false
       };
       
       console.log('createAddress - dbAddressData before create:', JSON.stringify(dbAddressData, null, 2));
