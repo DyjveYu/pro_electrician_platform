@@ -1,0 +1,61 @@
+<!--pages/payment/payment/payment.wxml-->
+<view class="container">
+  <!-- 订单信息 -->
+  <view class="order-section" wx:if="{{order}}">
+    <view class="section-title">订单信息</view>
+    <view class="order-info">
+      <view class="order-row">
+        <text class="label">订单号：</text>
+        <text class="value">{{order.orderNumber}}</text>
+      </view>
+      <view class="order-row">
+        <text class="label">服务类型：</text>
+        <text class="value">{{order.serviceTypeName}}</text>
+      </view>
+      <view class="order-row">
+        <text class="label">服务地址：</text>
+        <text class="value">{{order.address}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 支付金额 -->
+  <view class="amount-section">
+    <view class="amount-label">支付金额</view>
+    <view class="amount-value">¥{{order.amount}}</view>
+  </view>
+
+  <!-- 支付方式 -->
+  <view class="payment-section">
+    <view class="section-title">选择支付方式</view>
+    <view class="payment-methods">
+      <view 
+        class="payment-method {{selectedMethod === item.id ? 'selected' : ''}}"
+        wx:for="{{paymentMethods}}"
+        wx:key="id"
+        data-method="{{item.id}}"
+        bindtap="selectPaymentMethod"
+      >
+        <view class="method-icon">{{item.icon}}</view>
+        <view class="method-info">
+          <view class="method-name">{{item.name}}</view>
+          <view class="method-desc">{{item.desc}}</view>
+        </view>
+        <view class="method-radio">
+          <view class="radio {{selectedMethod === item.id ? 'checked' : ''}}"></view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 支付按钮 -->
+  <view class="pay-section">
+    <button 
+      class="pay-btn {{paying ? 'disabled' : ''}}"
+      bindtap="startPayment"
+      disabled="{{paying}}"
+    >
+      {{paying ? '支付中...' : '立即支付 ¥' + (order ? order.amount : '0')}}
+    </button>
+  </view>
+</view>

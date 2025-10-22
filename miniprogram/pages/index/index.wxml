@@ -1,0 +1,87 @@
+<!--pages/index/index.wxml-->
+<view class="page-container">
+  <!-- 顶部位置栏 -->
+  <view class="search-bar">
+    <view class="location-btn" bindtap="onLocationTap">
+      <image class="location-icon" src="/images/icons/location.png"></image>
+      <text class="location-text">{{locationText || '北京市朝阳区'}}</text>
+    </view>
+  </view>
+
+  <!-- 主要服务卡片 -->
+  <view class="quick-order">
+    <view class="order-card" bindtap="createOrder">
+      <view class="order-content">
+        <view class="order-title">电器故障？立即找师傅</view>
+        <view class="order-desc">专业电工，快速上门，安全可靠</view>
+      </view>
+      <view class="order-btn">
+        <text>+ 立即下单</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 最近订单 -->
+  <view class="my-orders">
+    <view class="section-header">
+      <view class="section-title">最近订单</view>
+      <view class="more-btn" bindtap="viewAllOrders">
+        <text>查看全部</text>
+      </view>
+    </view>
+    <view class="order-list">
+      <view class="order-item" wx:for="{{recentOrders}}" wx:key="id" bindtap="viewOrderDetail" data-id="{{item.id}}">
+        <view class="order-header">
+          <view class="order-title">{{item.title || '客厅灯具安装'}}</view>
+          <view class="order-status status-{{item.status}}">{{item.statusText || '已完成'}}</view>
+        </view>
+        <view class="order-electrician">服务师傅：{{item.electrician_name || '张师傅'}}</view>
+        <view class="order-info">
+          <view class="order-time-rating">
+            <text class="order-time">{{item.createdTime || '2024-01-15 14:30'}}</text>
+            <view class="order-rating">
+              <image class="rating-star" src="/images/icons/star.png"></image>
+              <text>{{item.rating || '5'}} 分</text>
+            </view>
+          </view>
+          <text class="order-price">¥{{item.quoted_price || '120'}}</text>
+        </view>
+      </view>
+      <view class="order-item">
+        <view class="order-header">
+          <view class="order-title">厨房插座维修</view>
+          <view class="order-status status-completed">已完成</view>
+        </view>
+        <view class="order-electrician">服务师傅：李师傅</view>
+        <view class="order-info">
+          <view class="order-time-rating">
+            <text class="order-time">2024-01-12 09:15</text>
+            <view class="order-rating">
+              <image class="rating-star" src="/images/icons/star.png"></image>
+              <text>4.8 分</text>
+            </view>
+          </view>
+          <text class="order-price">¥80</text>
+        </view>
+      </view>
+      <view class="order-item">
+        <view class="order-header">
+          <view class="order-title">卫生间照明修理</view>
+          <view class="order-status status-completed">已完成</view>
+        </view>
+        <view class="order-electrician">服务师傅：王师傅</view>
+        <view class="order-info">
+          <view class="order-time-rating">
+            <text class="order-time">2024-01-10 16:20</text>
+            <view class="order-rating">
+              <image class="rating-star" src="/images/icons/star.png"></image>
+              <text>4.9 分</text>
+            </view>
+          </view>
+          <text class="order-price">¥95</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+</view>
