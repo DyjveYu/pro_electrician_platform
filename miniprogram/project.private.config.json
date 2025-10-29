@@ -1,6 +1,6 @@
 {
   "libVersion": "3.10.1",
-  "projectname": "electrician-platform-mini",
+  "projectname": "electrician-miniprogram",
   "condition": {},
   "setting": {
     "urlCheck": false,

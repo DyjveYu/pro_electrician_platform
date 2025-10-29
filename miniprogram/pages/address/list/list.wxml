@@ -12,7 +12,10 @@
       <view class="address-content">
         <view class="address-header">
           <text class="contact-name">{{item.contactName}}</text>
-          <text class="contact-phone">{{item.contactPhone}}</text>
+          
+          <text class="contact-phone">{{item.city}}</text>
+          <text class="contact-phone">{{item.district}}</text>
+          <text class="contact-phone">{{item.detail}}</text>
           <view class="default-badge" wx:if="{{item.isDefault}}">
             <text>默认</text>
           </view>

@@ -1,4 +1,5 @@
 {
+
   "pages": [
     "pages/index/index",
     "pages/login/login",
@@ -18,6 +19,10 @@
     "pages/message/list/list",
     "pages/message/detail/detail",
     "pages/service-types/service-types"
+  ],
+  "requiredPrivateInfos": [
+    "getLocation",
+    "chooseLocation"
   ],
   "window": {
     "backgroundTextStyle": "light",

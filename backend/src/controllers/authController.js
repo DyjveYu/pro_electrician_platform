@@ -45,6 +45,7 @@ class AuthController {
         res.error(result.message, 400);
       }
     } catch (error) {
+      console.error('authController 出错:', error);
       next(error);
     }
   }
@@ -110,8 +111,26 @@ class AuthController {
         certification
       });
     } catch (error) {
+      console.error('authController 出错:', error);
+
+     // 如果是业务错误，可带上自定义信息
+      if (error.isJoi) {
+        return next({
+          status: 422,
+          message: error.details[0].message
+        });
+      }
+
+      if (error.code === 'ER_DUP_ENTRY') {
+        return next({
+          status: 409,
+          message: '账号已存在'
+        });
+      }
+
+      // 其他错误交给全局中间件
       next(error);
-    }
+        }
   }
 
   /**
@@ -159,6 +178,7 @@ class AuthController {
    * 更新用户信息
    */
   static async updateProfile(req, res, next) {
+    console.log('接收到的 req.body:', req.body);
     try {
       const userId = req.user.id;
       const { nickname, avatar } = req.body;

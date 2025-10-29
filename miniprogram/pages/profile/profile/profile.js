@@ -93,23 +93,33 @@ Page({
       header: {
         'Authorization': `Bearer ${app.globalData.token}`
       },
+      
       success: (res) => {
+        // 调试语句
+        // console.log('返回结果:', res.data);
+
         wx.stopPullDownRefresh();
-        if (res.data.code === 0) {
-          const userInfo = res.data.data.user;
-          const stats = res.data.data.stats || {
-            totalOrders: 0,
-            completedOrders: 0,
-            totalAmount: 0,
-            rating: 0
+        // ✅ 先定义 data
+        const data = res.data;
+         console.log('返回结果:', data);
+        // ✅ 判断逻辑
+        if (data.code === 0 || data.code === 200 || data.success === true) {
+          const userInfo = data.data.user;
+          const stats = data.data.stats || {
+            total_orders: 0,
+            completed_orders: 0,
+            total_spent: 0
           };
           
-          this.setData({ 
+          this.setData({
             userInfo,
             stats: {
               totalOrders: stats.total_orders || 0,
               completedOrders: stats.completed_orders || 0,
-              totalAmount: app.globalData.currentRole === 'user' ? (stats.total_spent || 0) : (stats.total_earned || 0),
+              totalAmount:
+                app.globalData.currentRole === 'user'
+                  ? (stats.total_spent || 0)
+                  : (stats.total_earned || 0),
               rating: 0
             }
           });
@@ -121,12 +131,12 @@ Page({
           if (app.globalData.currentRole === 'electrician' && userInfo.isElectrician) {
             this.loadElectricianInfo();
           }
-        } else if (res.data.code === 401) {
+        } else if (data.code === 401) {
           // token无效，重新登录
           console.log('token无效，重新登录');
           app.logout();
         } else {
-          console.log('获取用户信息失败:', res.data.message);
+          console.log('获取用户信息失败:', data.message || JSON.stringify(data));
           wx.showToast({
             title: res.data.message || '获取用户信息失败',
             icon: 'none'

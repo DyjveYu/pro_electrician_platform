@@ -12,13 +12,17 @@ Page({
   },
 
   onShow() {
-    this.loadAddresses();
+    //this.loadAddresses();
+    // 延迟一点时间以防刚保存完未能查到最新数据
+    setTimeout(() => {
+      this.loadAddresses();
+    }, 500);
   },
 
   // 加载地址列表
   loadAddresses() {
     this.setData({ loading: true });
-    
+
     const app = getApp();
     wx.request({
       url: `${app.globalData.baseUrl}/addresses`,
@@ -28,8 +32,31 @@ Page({
       },
       success: (res) => {
         this.setData({ loading: false });
-        if (res.data.code === 0) {
-          this.setData({ addresses: res.data.data });
+        if (res.data.code === 0 || res.data.code === 200) {
+          const list = (res.data.data && res.data.data.addresses) || [];
+          // 把下划线字段转换为驼峰并统一字段名
+          const mapped = list.map(item => ({
+            id: item.id,
+            contactName: item.contact_name || item.contactName || '',
+            contactPhone: item.contact_phone || item.contactPhone || '',
+            province: item.province || '',
+            city: item.city || '',
+            district: item.district || '',
+            detail: item.detail_address || item.detail || '',
+            isDefault: !!item.is_default
+          }));
+          this.setData({ addresses: mapped });
+          /*const addressList = res.data.data.addresses || [];
+
+          this.setData({ addresses: addressList });
+
+          // 检查地址列表是否为空
+          if (addressList.length === 0) {
+            wx.showToast({ title: '暂无地址，请添加', icon: 'none' });
+          }
+            */
+        } else {
+          wx.showToast({ title: res.data.message || '加载失败', icon: 'none' });
         }
       },
       fail: () => {
@@ -42,7 +69,7 @@ Page({
   // 选择地址
   selectAddress(e) {
     const address = e.currentTarget.dataset.address;
-    
+
     if (this.data.from === 'order') {
       // 从下单页面来的，返回选中的地址
       const pages = getCurrentPages();
@@ -72,7 +99,7 @@ Page({
   // 删除地址
   deleteAddress(e) {
     const addressId = e.currentTarget.dataset.id;
-    
+
     wx.showModal({
       title: '确认删除',
       content: '确定要删除这个地址吗？',
@@ -87,7 +114,7 @@ Page({
   // 执行删除地址
   performDeleteAddress(addressId) {
     const app = getApp();
-    
+
     wx.request({
       url: `${app.globalData.baseUrl}/addresses/${addressId}`,
       method: 'DELETE',

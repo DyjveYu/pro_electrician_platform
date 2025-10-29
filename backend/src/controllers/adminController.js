@@ -508,37 +508,96 @@ class AdminController {
   static async getStatistics(req, res) {
     try {
       // 用户统计
-      const userStats = await query(
-        `SELECT 
-           COUNT(*) as total_users,
-           COUNT(CASE WHEN status = 'active' THEN 1 END) as active_users,
-           COUNT(CASE WHEN current_role = 'electrician' THEN 1 END) as electricians
-         FROM users`
-      );
+      const totalUsers = await User.count();
+      const activeUsers = await User.count({
+        where: { status: 'active' }
+      });
+      const electricians = await User.count({
+        where: { current_role: 'electrician' }
+      });
+
+      const userStats = {
+        total_users: totalUsers,
+        active_users: activeUsers,
+        electricians: electricians
+      };
 
       // 工单统计
-      const orderStats = await query(
-        `SELECT 
-           COUNT(*) as total_orders,
-           COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_orders,
-           COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_orders,
-           COUNT(CASE WHEN DATE(created_at) = CURDATE() THEN 1 END) as today_orders
-         FROM orders`
-      );
+      const totalOrders = await Order.count();
+      const pendingOrders = await Order.count({
+        where: { status: 'pending' }
+      });
+      const completedOrders = await Order.count({
+        where: { status: 'completed' }
+      });
+
+      // 获取今天的日期（YYYY-MM-DD 格式）
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      const todayOrders = await Order.count({
+        where: {
+          created_at: {
+            [Op.gte]: today,
+            [Op.lt]: tomorrow
+          }
+        }
+      });
+
+      const orderStats = {
+        total_orders: totalOrders,
+        pending_orders: pendingOrders,
+        completed_orders: completedOrders,
+        today_orders: todayOrders
+      };
 
       // 收入统计
-      const revenueStats = await query(
-        `SELECT 
-           COALESCE(SUM(final_amount), 0) as total_revenue,
-           COALESCE(SUM(CASE WHEN DATE(created_at) = CURDATE() THEN final_amount ELSE 0 END), 0) as today_revenue,
-           COALESCE(SUM(CASE WHEN YEARWEEK(created_at) = YEARWEEK(NOW()) THEN final_amount ELSE 0 END), 0) as week_revenue
-         FROM orders WHERE status = 'completed'`
-      );
+      const totalRevenue = await Order.sum('final_amount', {
+        where: { status: 'completed' }
+      }) || 0;
+
+      const todayRevenue = await Order.sum('final_amount', {
+        where: {
+          status: 'completed',
+          created_at: {
+            [Op.gte]: today,
+            [Op.lt]: tomorrow
+          }
+        }
+      }) || 0;
+
+      // 获取本周的开始和结束日期
+      const currentDate = new Date();
+      const firstDayOfWeek = new Date(currentDate);
+      firstDayOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
+      firstDayOfWeek.setHours(0, 0, 0, 0);
+
+      const lastDayOfWeek = new Date(firstDayOfWeek);
+      lastDayOfWeek.setDate(firstDayOfWeek.getDate() + 7);
+
+      const weekRevenue = await Order.sum('final_amount', {
+        where: {
+          status: 'completed',
+          created_at: {
+            [Op.gte]: firstDayOfWeek,
+            [Op.lt]: lastDayOfWeek
+          }
+        }
+      }) || 0;
+
+      const revenueStats = {
+        total_revenue: totalRevenue,
+        today_revenue: todayRevenue,
+        week_revenue: weekRevenue
+      };
 
       res.success({
-        users: userStats[0],
-        orders: orderStats[0],
-        revenue: revenueStats[0]
+        users: userStats,
+        orders: orderStats,
+        revenue: revenueStats
       });
     } catch (error) {
       console.error('获取统计数据错误:', error);
@@ -551,36 +610,29 @@ class AdminController {
     try {
       const { page = 1, limit = 20, type = '', status = '' } = req.query;
       const offset = (page - 1) * limit;
-
-      let whereClause = 'WHERE 1=1';
-      const params = [];
-
+      
+      // 构建查询条件
+      const where = {};
+      
       if (type && type.trim() !== '') {
-        whereClause += ' AND type = ?';
-        params.push(type);
+        where.type = type;
       }
-
+      
       if (status && status.trim() !== '') {
-        whereClause += ' AND status = ?';
-        params.push(status);
+        where.status = status;
       }
-
-      // 获取系统通知列表
-      const messages = await query(
-        `SELECT * FROM system_messages ${whereClause} 
-         ORDER BY created_at DESC 
-         LIMIT ${parseInt(offset)}, ${parseInt(limit)}`,
-        params
-      );
-
-      const countResult = await query(
-        `SELECT COUNT(*) as total FROM system_messages ${whereClause}`,
-        params
-      );
-
+      
+      // 使用 Sequelize 查询系统通知列表
+      const { count, rows: messages } = await SystemMessage.findAndCountAll({
+        where,
+        order: [['created_at', 'DESC']],
+        offset: parseInt(offset),
+        limit: parseInt(limit)
+      });
+      
       res.success({
         messages,
-        total: countResult[0].total,
+        total: count,
         page: parseInt(page),
         limit: parseInt(limit)
       });
@@ -599,14 +651,19 @@ class AdminController {
       // 处理scheduled_at空值，将空字符串转换为NULL
       const processedScheduledAt = scheduled_at && scheduled_at.trim() !== '' ? scheduled_at : null;
 
-      const result = await query(
-        `INSERT INTO system_messages 
-         (title, content, target_users, type, priority, scheduled_at, created_by, published_at) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
-        [title, content, target_users, type, priority, processedScheduledAt, adminId]
-      );
+      // 使用 Sequelize 创建系统通知
+      const message = await SystemMessage.create({
+        title,
+        content,
+        target_users,
+        type,
+        priority,
+        scheduled_at: processedScheduledAt,
+        created_by: adminId,
+        published_at: new Date()
+      });
 
-      res.success({ id: result.insertId }, '通知发布成功');
+      res.success({ id: message.id }, '通知发布成功');
     } catch (error) {
       console.error('发布系统通知错误:', error);
       res.error('发布失败');
@@ -618,16 +675,13 @@ class AdminController {
     try {
       const { id } = req.params;
 
-      const messages = await query(
-        'SELECT * FROM system_messages WHERE id = ?',
-        [id]
-      );
+      const message = await SystemMessage.findByPk(id);
 
-      if (messages.length === 0) {
+      if (!message) {
         return res.error('通知不存在', 404);
       }
 
-      res.success(messages[0]);
+      res.success(message);
     } catch (error) {
       console.error('获取通知详情错误:', error);
       res.error('获取通知详情失败');
@@ -640,12 +694,22 @@ class AdminController {
       const { id } = req.params;
       const { title, content, target_users, type, priority, status } = req.body;
 
-      await query(
-        `UPDATE system_messages 
-         SET title = ?, content = ?, target_users = ?, type = ?, priority = ?, status = ?, updated_at = NOW() 
-         WHERE id = ?`,
-        [title, content, target_users, type, priority, status, id]
-      );
+      const message = await SystemMessage.findByPk(id);
+      
+      if (!message) {
+        return res.error('通知不存在', 404);
+      }
+      
+      // 更新通知信息
+      await message.update({
+        title,
+        content,
+        target_users,
+        type,
+        priority,
+        status,
+        updated_at: new Date()
+      });
 
       res.success(null, '通知更新成功');
     } catch (error) {
@@ -658,8 +722,14 @@ class AdminController {
   static async deleteMessage(req, res) {
     try {
       const { id } = req.params;
-
-      await query('DELETE FROM system_messages WHERE id = ?', [id]);
+      
+      const message = await SystemMessage.findByPk(id);
+      
+      if (!message) {
+        return res.error('通知不存在', 404);
+      }
+      
+      await message.destroy();
 
       res.success(null, '通知删除成功');
     } catch (error) {

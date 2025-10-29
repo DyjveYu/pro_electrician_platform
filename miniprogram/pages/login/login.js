@@ -199,7 +199,7 @@ Page({
       // 保存登录信息
       app.login(res.data.user, res.data.token);
       
-      app.showToast('登录成功', 'success成功');
+      app.showToast('登录成功');
       
       // 延迟跳转，让用户看到成功提示
       setTimeout(() => {

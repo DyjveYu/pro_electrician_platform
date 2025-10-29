@@ -3,8 +3,8 @@
   <!-- 头部区域 -->
   <view class="header">
     <view class="logo">
-      <text class="logo-icon">⚡</text>
-    </view>
+      <image class="logo" src="/images/icons/logo.png"></image>
+      </view>
     <text class="title">电工维修</text>
     <text class="subtitle">专业电工，快速上门</text>
   </view>
