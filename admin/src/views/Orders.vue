@@ -97,25 +97,33 @@
       >
         <el-table-column type="selection" width="55" />
         
-        <el-table-column prop="order_number" label="工单号" width="150" />
+        <el-table-column prop="order_no" label="工单号" width="150" />
         
-        <el-table-column prop="user_phone" label="用户手机号" width="130" />
+        <el-table-column prop="user_nickname" label="用户昵称" width="130" />
         
-        <el-table-column prop="electrician_name" label="电工" width="100">
+        <el-table-column prop="electrician_nickname" label="电工" width="100">
           <template #default="{ row }">
-            <span>{{ row.electrician_name || '未分配' }}</span>
+            <span>{{ row.electrician_nickname || '未分配' }}</span>
           </template>
         </el-table-column>
         
-        <el-table-column prop="service_type" label="服务类型" width="120" />
+        <el-table-column prop="service_type_name" label="服务类型" width="120" />
         
-        <el-table-column prop="description" label="问题描述" width="200" show-overflow-tooltip />
-        
-        <el-table-column prop="address" label="服务地址" width="200" show-overflow-tooltip />
-        
-        <el-table-column prop="amount" label="金额" width="100">
+        <el-table-column label="问题描述" width="200" show-overflow-tooltip>
           <template #default="{ row }">
-            <span v-if="row.amount">¥{{ row.amount }}</span>
+            <span>{{ row.title || '-' }}</span>
+          </template>
+        </el-table-column>
+        
+        <el-table-column label="服务地址" width="200" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span>{{ row.service_address || '-' }}</span>
+          </template>
+        </el-table-column>
+        
+        <el-table-column prop="final_amount" label="金额" width="100">
+          <template #default="{ row }">
+            <span v-if="row.final_amount">¥{{ row.final_amount }}</span>
             <span v-else class="text-muted">未报价</span>
           </template>
         </el-table-column>
@@ -334,7 +342,7 @@ const loadOrderList = async () => {
     const params = {
       page: pagination.page,
       limit: pagination.limit,
-      keyword: searchForm.keyword,
+      search: searchForm.keyword,
       status: searchForm.status
     }
     
@@ -345,48 +353,14 @@ const loadOrderList = async () => {
     
     const response = await getOrderList(params)
     if (response.code === 200) {
-      orderList.value = response.data.list
+      orderList.value = response.data.orders
       pagination.total = response.data.total
       Object.assign(orderStats, response.data.stats || {})
     }
   } catch (error) {
     console.error('加载工单列表失败:', error)
-    // 使用模拟数据
-    orderList.value = [
-      {
-        id: 1,
-        order_number: 'ORD202401001',
-        user_phone: '13800138000',
-        electrician_name: '张师傅',
-        service_type: '电路维修',
-        description: '客厅电路跳闸，需要检修',
-        address: '北京市朝阳区xxx小区1号楼101',
-        amount: 150,
-        status: 'completed',
-        created_at: '2024-01-15T10:00:00Z',
-        completed_at: '2024-01-15T14:30:00Z'
-      },
-      {
-        id: 2,
-        order_number: 'ORD202401002',
-        user_phone: '13900139000',
-        electrician_name: null,
-        service_type: '开关插座',
-        description: '卧室插座不通电',
-        address: '北京市海淀区xxx小区2号楼202',
-        amount: null,
-        status: 'pending',
-        created_at: '2024-01-15T11:00:00Z',
-        completed_at: null
-      }
-    ]
-    pagination.total = 2
-    Object.assign(orderStats, {
-      total: 156,
-      pending: 23,
-      inProgress: 45,
-      completed: 88
-    })
+    ElMessage.error('加载工单列表失败: ' + error.message)
+    orderList.value = []
   } finally {
     loading.value = false
   }

@@ -131,22 +131,42 @@ class OrderController {
         my_orders = false
       } = req.query;
 
+      // 安全审计日志
+      console.log(`[SECURITY] 订单列表访问 - 用户ID: ${userId}, 角色: ${userRole}, 参数:`, {
+        page, limit, status, service_type_id, search, my_orders,
+        ip: req.ip || req.connection.remoteAddress,
+        userAgent: req.get('User-Agent')
+      });
+
       // 构建查询条件
       const where = {};
       const pageNumber = parseInt(page);
       const pageSize = parseInt(limit);
       
       // 根据用户角色设置查询条件
-      if (my_orders === 'true' || my_orders === true) {
-        if (userRole === 'user') {
-          where.user_id = userId;
-        } else if (userRole === 'electrician') {
-          where.electrician_id = userId;
-        }
+      if (userRole === 'user') {
+        // 普通用户只能查看自己的订单
+        where.user_id = userId;
+        console.log(`用户 ${userId} 查询自己的订单`);
       } else if (userRole === 'electrician') {
-        // 电工默认只能看到待接单的工单
-        where.status = 'pending';
-        where.electrician_id = null;
+        if (my_orders === 'true' || my_orders === true) {
+          // 电工查看自己接的订单
+          where.electrician_id = userId;
+          console.log(`电工 ${userId} 查询自己接的订单`);
+        } else {
+          // 电工默认只能看到待接单的工单
+          where.status = 'pending';
+          where.electrician_id = null;
+          console.log(`电工 ${userId} 查询可接的待处理订单`);
+        }
+      } else if (userRole === 'admin') {
+        // 管理员可以查看所有订单
+        console.log(`管理员 ${userId} 查询所有订单`);
+        // 管理员不添加用户过滤条件，可以查看所有订单
+      } else {
+        // 未知角色，拒绝访问
+        console.warn(`未知用户角色 ${userRole}，用户ID: ${userId}`);
+        throw new AppError('权限不足', 403);
       }
 
       // 按状态筛选
@@ -201,6 +221,9 @@ class OrderController {
         }
         return plainOrder;
       });
+
+      // 安全审计日志 - 记录查询结果
+      console.log(`[SECURITY] 订单查询结果 - 用户ID: ${userId}, 角色: ${userRole}, 返回订单数: ${count}, 实际返回: ${orders.length}`);
 
       // 返回分页结果
       res.success({

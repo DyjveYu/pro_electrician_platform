@@ -22,7 +22,7 @@ Page({
     if (options.mode) {
       this.setData({ mode: options.mode });
     }
-    
+
     // 如果是查看模式，加载认证信息
     if (this.data.mode === 'view') {
       this.loadCertificationInfo();
@@ -32,11 +32,11 @@ Page({
   // 加载认证信息
   loadCertificationInfo() {
     const app = getApp();
-    
+
     wx.showLoading({
       title: '加载中',
     });
-    
+
     wx.request({
       url: `${app.globalData.baseUrl}/api/electricians/certification`,
       method: 'GET',
@@ -77,47 +77,47 @@ Page({
   onInputChange(e) {
     const { field } = e.currentTarget.dataset;
     const { value } = e.detail;
-    
+
     this.setData({
       [`formData.${field}`]: value
     });
-    
+
     this.checkFormValid();
   },
-  
+
   // 日期选择器变更
   bindDateChange(e) {
     const { field } = e.currentTarget.dataset;
     const value = e.detail.value;
-    
+
     this.setData({
       [`formData.${field}`]: value
     });
-    
+
     this.checkFormValid();
   },
-  
+
   // 地区选择器变更
   bindRegionChange(e) {
     this.setData({
       region: e.detail.value
     });
-    
+
     // 更新服务区域字段
     const serviceArea = e.detail.value.join('');
     this.setData({
       'formData.serviceArea': serviceArea
     });
-    
+
     this.checkFormValid();
   },
-  
+
   // 获取当前位置
   getLocation() {
     wx.showLoading({
       title: '获取位置中',
     });
-    
+
     wx.getLocation({
       type: 'gcj02',
       success: (res) => {
@@ -132,12 +132,12 @@ Page({
                 addressInfo.city || '',
                 addressInfo.district || ''
               ];
-              
+
               this.setData({
                 region: region,
                 'formData.serviceArea': region.join('')
               });
-              
+
               this.checkFormValid();
             }
           },
@@ -159,15 +159,15 @@ Page({
   // 检查表单是否有效
   checkFormValid() {
     const { formData } = this.data;
-    
+
     // 检查所有必填字段
-    const isValid = formData.realName && 
-                   formData.idCard && 
-                   formData.certificateNumber && 
-                   formData.certificateStartDate && 
-                   formData.certificateEndDate && 
-                   formData.serviceArea;
-    
+    const isValid = formData.realName &&
+      formData.idCard &&
+      formData.certificateNumber &&
+      formData.certificateStartDate &&
+      formData.certificateEndDate &&
+      formData.serviceArea;
+
     this.setData({
       submitDisabled: !isValid
     });
@@ -178,24 +178,25 @@ Page({
     if (this.data.submitDisabled) {
       return;
     }
-    
+
     const app = getApp();
-    
+
     wx.showLoading({
       title: '提交中',
     });
-    
+
     // 构建请求数据
     const requestData = {
       real_name: this.data.formData.realName,
       id_card: this.data.formData.idCard,
-      certificate_number: this.data.formData.certificateNumber,
-      certificate_start_date: this.data.formData.certificateStartDate,
-      certificate_end_date: this.data.formData.certificateEndDate,
+      electrician_cert_no: this.data.formData.certificateNumber,
+      cert_start_date: this.data.formData.certificateStartDate,
+      cert_end_date: this.data.formData.certificateEndDate,
       service_area: this.data.formData.serviceArea,
       region: this.data.region.join(',')
     };
-    
+
+
     wx.request({
       url: `${app.globalData.baseUrl}/electricians/certification`,
       method: 'POST',
@@ -205,12 +206,13 @@ Page({
       },
       data: requestData,
       success: (res) => {
-        if (res.data.code === 0) {
+        const code = res.data.code;
+        if (code === 0 || code === 200) {
           wx.showToast({
             title: '提交成功',
             icon: 'success'
           });
-          
+
           // 延迟返回上一页
           setTimeout(() => {
             wx.navigateBack();
@@ -238,7 +240,7 @@ Page({
   previewImage(e) {
     const { type } = e.currentTarget.dataset;
     let url = '';
-    
+
     if (type === 'idCardFront') {
       url = this.data.idCardFrontPath;
     } else if (type === 'idCardBack') {
@@ -246,7 +248,7 @@ Page({
     } else if (type === 'certificate') {
       url = this.data.certificatePath;
     }
-    
+
     if (url) {
       wx.previewImage({
         urls: [url],

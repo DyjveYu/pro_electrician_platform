@@ -34,26 +34,26 @@
       <!-- 订单内容 -->
       <view class="order-content">
         <view class="service-info">
-          <text class="service-type">{{item.serviceTypeName}}</text>
+          <!--text class="service-type">{{item.serviceTypeName}}</text-->
           <text class="service-desc">{{item.description}}</text>
         </view>
-        <view class="order-amount" wx:if="{{item.amount}}">
+        <!--view class="order-amount" wx:if="{{item.amount}}">
           <text class="amount-label">金额：</text>
           <text class="amount-value">¥{{item.amount}}</text>
-        </view>
+        </view-->
       </view>
 
       <!-- 地址信息 -->
       <view class="address-info">
         <text class="address-icon">📍</text>
-        <text class="address-text">{{item.address}}</text>
+        <text class="address-text">{{item.service_address}}</text>
       </view>
 
-      <!-- 联系信息 -->
-      <view class="contact-info" wx:if="{{item.contactName}}">
-        <text class="contact-name">{{item.contactName}}</text>
+      <!-- 联系信息 
+      <view class="contact-info" wx:if="{{item.contact_name}}">
+        <text class="contact-name">{{item.contact_name}}</text>
         <text class="contact-phone">{{item.contactPhone}}</text>
-      </view>
+      </view>-->
 
       <!-- 电工信息（用户视角） -->
       <view class="electrician-info" wx:if="{{item.electrician && item.electrician.name}}">

@@ -192,7 +192,7 @@ uploadAvatar(filePath) {
       data: requestData,
       success: (res) => {
         this.setData({ saving: false });
-        if (res.data.code === 0) {
+        if (res.data.code === 200 ) {
           // 更新全局用户信息
           app.globalData.userInfo = {
             ...app.globalData.userInfo,

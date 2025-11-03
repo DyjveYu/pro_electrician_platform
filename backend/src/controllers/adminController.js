@@ -241,7 +241,14 @@ class AdminController {
       // 格式化结果，映射字段名称
       const electricians = certifications.map(cert => {
         const plainCert = cert.get({ plain: true });
-        const userInfo = plainCert.User || {};
+        const userInfo = plainCert.user || {};
+        
+        // 添加调试日志
+        console.log('=== 电工数据调试 ===');
+        console.log('plainCert keys:', Object.keys(plainCert));
+        console.log('userInfo:', userInfo);
+        console.log('userInfo.phone:', userInfo.phone);
+        console.log('==================');
         
         return {
           id: plainCert.id,
@@ -363,6 +370,10 @@ class AdminController {
     try {
       const { page = 1, limit = 20, search = '', status = '', service_type = '' } = req.query;
       const offset = (page - 1) * limit;
+      
+      console.log('=== 管理员获取订单列表 ===');
+      console.log('请求参数:', { page, limit, search, status, service_type });
+      console.log('计算偏移量:', offset);
 
       // 构建查询条件
       const where = {};
@@ -378,27 +389,30 @@ class AdminController {
       if (service_type && service_type.trim() !== '') {
         where.service_type_id = service_type;
       }
+      
+      console.log('构建的查询条件:', where);
 
       // 使用Sequelize查询工单列表
       const { count, rows: orders } = await Order.findAndCountAll({
         where,
         attributes: ['id', 'order_no', 'user_id', 'electrician_id', 'service_type_id', 'status', 
-                    'final_amount', 'created_at', 'updated_at'],
+                    'final_amount', 'title', 'service_address', 'created_at', 'updated_at'],
         include: [
           {
             model: User,
-            as: 'User',
+            as: 'user',
             attributes: ['nickname'],
             required: false
           },
           {
             model: User,
-            as: 'Electrician',
+            as: 'electrician',
             attributes: ['nickname'],
             required: false
           },
           {
             model: ServiceType,
+            as: 'serviceType', // ✅ 必须与模型定义保持一致
             attributes: ['name'],
             required: false
           }
@@ -407,15 +421,17 @@ class AdminController {
         offset: parseInt(offset),
         limit: parseInt(limit)
       });
+      
+      console.log('查询结果统计:', { total: count, returned: orders.length });
 
       // 格式化结果
       const enrichedOrders = orders.map(order => {
         const plainOrder = order.get({ plain: true });
         return {
           ...plainOrder,
-          user_nickname: plainOrder.User ? plainOrder.User.nickname : '',
-          electrician_nickname: plainOrder.Electrician ? plainOrder.Electrician.nickname : '',
-          service_type_name: plainOrder.ServiceType ? plainOrder.ServiceType.name : ''
+          user_nickname: plainOrder.user ? plainOrder.user.nickname : '',
+          electrician_nickname: plainOrder.electrician ? plainOrder.electrician.nickname : '',
+          service_type_name: plainOrder.serviceType ? plainOrder.serviceType.name : ''
         };
       });
 
@@ -425,6 +441,8 @@ class AdminController {
         page: parseInt(page),
         limit: parseInt(limit)
       });
+      
+      console.log('成功返回订单列表，数量:', enrichedOrders.length);
     } catch (error) {
       console.error('获取工单列表错误:', error);
       res.error('获取工单列表失败');
@@ -440,16 +458,17 @@ class AdminController {
         include: [
           {
             model: User,
-            as: 'User',
+            as: 'user',
             attributes: ['nickname', 'phone']
           },
           {
             model: User,
-            as: 'Electrician',
+            as: 'electrician',
             attributes: ['nickname', 'phone']
           },
           {
             model: ServiceType,
+            as: 'serviceType',
             attributes: ['name']
           }
         ]
@@ -463,17 +482,17 @@ class AdminController {
       const plainOrder = order.get({ plain: true });
       const result = {
         ...plainOrder,
-        user_nickname: plainOrder.User ? plainOrder.User.nickname : '',
-        user_phone: plainOrder.User ? plainOrder.User.phone : '',
-        electrician_nickname: plainOrder.Electrician ? plainOrder.Electrician.nickname : '',
-        electrician_phone: plainOrder.Electrician ? plainOrder.Electrician.phone : '',
-        service_type_name: plainOrder.ServiceType ? plainOrder.ServiceType.name : ''
+        user_nickname: plainOrder.user ? plainOrder.user.nickname : '',
+        user_phone: plainOrder.user ? plainOrder.user.phone : '',
+        electrician_nickname: plainOrder.electrician ? plainOrder.electrician.nickname : '',
+        electrician_phone: plainOrder.electrician ? plainOrder.electrician.phone : '',
+        service_type_name: plainOrder.serviceType ? plainOrder.serviceType.name : ''
       };
       
       // 删除嵌套对象
-      delete result.User;
-      delete result.Electrician;
-      delete result.ServiceType;
+      delete result.user;
+      delete result.electrician;
+      delete result.serviceType;
 
       res.success(result);
     } catch (error) {

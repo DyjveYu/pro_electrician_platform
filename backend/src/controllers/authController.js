@@ -148,12 +148,18 @@ class AuthController {
       // 获取用户统计信息
       const stats = await User.getUserStats(userId, user.current_role);
 
-      // 获取电工认证信息（如果是电工角色）
-      let certification = null;
-      if (user.current_role === 'electrician') {
-        certification = await User.getElectricianCertification(userId);
-      }
+      // 不论当前角色，都尝试查询认证信息 update by dyjveyu 25.10.30
+      const certification = await User.getElectricianCertification(userId);
+      
+      let certificationStatus = 'unverified';
+      let isElectrician = false;
 
+      if (certification) {
+        certificationStatus = certification.status; // pending / approved / rejected
+        if (certification.status === 'approved') {
+          isElectrician = true;
+        }
+      }
       res.success({
         user: {
           id: user.id,
@@ -164,7 +170,9 @@ class AuthController {
           status: user.status,
           created_at: user.created_at,
           updated_at: user.updated_at,
-          last_login_at: user.last_login_at
+          last_login_at: user.last_login_at,
+          certificationStatus,
+          isElectrician
         },
         stats,
         certification

@@ -48,111 +48,110 @@ Page({
       rating: 0
     }
   },
-
+  // 页面加载时：初始化时加载一次用户信息
   onLoad() {
     this.loadUserInfo();
   },
-
+  //页面重新显示时，每次从其他页面返回时刷新数据
   onShow() {
     // 页面显示时刷新数据
     this.loadUserInfo();
   },
 
+  // 用户下拉刷新时
   onPullDownRefresh() {
     this.loadUserInfo();
   },
 
-  // 加载用户信息
-  loadUserInfo() {
-    const app = getApp();
-    
-    // 检查是否已登录
-    if (!app.globalData.token) {
-      console.log('用户未登录，跳转到登录页');
-      // 延迟跳转，避免与登录成功后的跳转冲突
-      setTimeout(() => {
-        wx.reLaunch({
-          url: '/pages/login/login'
-        });
-      }, 100);
-      return;
-    }
-    
-    // 从全局数据获取用户信息
-    if (app.globalData.userInfo) {
-      this.setData({
-        userInfo: app.globalData.userInfo,
-        currentRole: app.globalData.currentRole
-      });
-    }
-    
-    // 从服务器获取最新用户信息
-    wx.request({
-      url: `${app.globalData.baseUrl}/auth/userinfo`,
-      method: 'GET',
-      header: {
-        'Authorization': `Bearer ${app.globalData.token}`
-      },
-      
-      success: (res) => {
-        // 调试语句
-        // console.log('返回结果:', res.data);
+  // 加载用户信息（替换现有函数）
+loadUserInfo() {
+  const app = getApp();
 
-        wx.stopPullDownRefresh();
-        // ✅ 先定义 data
-        const data = res.data;
-         console.log('返回结果:', data);
-        // ✅ 判断逻辑
-        if (data.code === 0 || data.code === 200 || data.success === true) {
-          const userInfo = data.data.user;
-          const stats = data.data.stats || {
-            total_orders: 0,
-            completed_orders: 0,
-            total_spent: 0
-          };
-          
-          this.setData({
-            userInfo,
-            stats: {
-              totalOrders: stats.total_orders || 0,
-              completedOrders: stats.completed_orders || 0,
-              totalAmount:
-                app.globalData.currentRole === 'user'
-                  ? (stats.total_spent || 0)
-                  : (stats.total_earned || 0),
-              rating: 0
-            }
-          });
-          
-          // 更新全局用户信息
-          app.globalData.userInfo = userInfo;
-          
-          // 如果是电工角色，获取电工信息
-          if (app.globalData.currentRole === 'electrician' && userInfo.isElectrician) {
-            this.loadElectricianInfo();
-          }
-        } else if (data.code === 401) {
-          // token无效，重新登录
-          console.log('token无效，重新登录');
-          app.logout();
-        } else {
-          console.log('获取用户信息失败:', data.message || JSON.stringify(data));
-          wx.showToast({
-            title: res.data.message || '获取用户信息失败',
-            icon: 'none'
-          });
-        }
-      },
-      fail: (err) => {
-        wx.stopPullDownRefresh();
-        console.log('获取用户信息失败:', err);
-        wx.showToast({
-          title: '网络连接失败',
-          icon: 'none'
-        });
-      }
+  // 检查登录
+  if (!app.globalData.token) {
+    console.log('用户未登录，跳转到登录页');
+    setTimeout(() => {
+      wx.reLaunch({ url: '/pages/login/login' });
+    }, 100);
+    return;
+  }
+
+  // 如果有全局缓存，先展示（非必须，但可提升体验）
+  if (app.globalData.userInfo) {
+    this.setData({
+      userInfo: app.globalData.userInfo,
+      currentRole: app.globalData.currentRole
     });
-  },
+  }
+
+  // 发请求获取最新数据
+  wx.request({
+    url: `${app.globalData.baseUrl}/auth/userinfo`,
+    method: 'GET',
+    header: { 'Authorization': `Bearer ${app.globalData.token}` },
+    success: (res) => {
+      wx.stopPullDownRefresh();
+      const data = res.data;
+      console.log('auth/userinfo 返回：', data);
+
+      if (data && (data.code === 0 || data.code === 200 || data.success === true)) {
+        const userInfo = data.data.user || {};
+        const stats = data.data.stats || {};
+
+        // 状态映射（前端展示用）
+        const statusMap = {
+          unverified: '未认证',
+          pending: '认证中',
+          approved: '已认证',
+          rejected: '已驳回'
+        };
+
+        // 统一字段名 / 回退：避免 nickname 为 null 导致显示异常
+        //（这里不改后端字段，只保证页面显示稳定）
+        const normalizedUserInfo = {
+          ...userInfo,
+          nickname: (userInfo.nickname === null || userInfo.nickname === undefined) ? '' : userInfo.nickname,
+          // 保持 phone、avatar 等原样
+        };
+
+        // 更新页面数据（合并一次 setData）
+        this.setData({
+          userInfo: normalizedUserInfo,
+          currentRole: app.globalData.currentRole || normalizedUserInfo.current_role || 'user',
+          electricianInfo: data.data.certification || null,
+          certificationStatusText: statusMap[normalizedUserInfo.certificationStatus] || '未认证',
+          stats: {
+            totalOrders: stats.total_orders || 0,
+            completedOrders: stats.completed_orders || 0,
+            totalAmount: app.globalData.currentRole === 'user' ? (stats.total_spent || 0) : (stats.total_earned || 0),
+            rating: 0
+          }
+        });
+
+        // 同步到全局（以后其它页面读取）
+        app.globalData.userInfo = normalizedUserInfo;
+        app.globalData.currentRole = this.data.currentRole;
+
+        // 如果用户处于电工角色或想查看电工详细信息（approved 状态），可拉取电工详情
+        if (this.data.currentRole === 'electrician' || normalizedUserInfo.isElectrician) {
+          // 小优化：只在必要时拉取电工信息
+          this.loadElectricianInfo();
+        }
+      } else if (data && data.code === 401) {
+        // token无效
+        app.logout();
+      } else {
+        console.warn('获取用户信息失败：', data && data.message);
+        wx.showToast({ title: data && data.message ? data.message : '获取用户信息失败', icon: 'none' });
+      }
+    },
+    fail: (err) => {
+      wx.stopPullDownRefresh();
+      console.error('获取用户信息失败：', err);
+      wx.showToast({ title: '网络连接失败', icon: 'none' });
+    }
+  });
+},
 
   // 加载电工信息
   loadElectricianInfo() {
@@ -192,21 +191,18 @@ Page({
   },
 
   // 处理电工认证
-  handleCertification() {
-    const app = getApp();
-    
-    if (this.data.userInfo && this.data.userInfo.isElectrician) {
-      // 已认证，显示认证信息
-      wx.navigateTo({
-        url: '/pages/profile/certification/certification?mode=view'
-      });
-    } else {
-      // 未认证，进入认证流程
-      wx.navigateTo({
-        url: '/pages/profile/certification/certification?mode=apply'
-      });
-    }
-  },
+ handleCertification() {
+  const userInfo = this.data.userInfo || {};
+  const status = userInfo.certificationStatus || 'unverified';
+
+  // 逻辑：已认证（approved）去查看；审核中/未认证/驳回，进入申请页面（apply）
+  if (status === 'approved') {
+    wx.navigateTo({ url: '/pages/profile/certification/certification?mode=view' });
+  } else {
+    // 如果想把 rejected 显示为查看但允许重新申请，也可改为不同路径
+    wx.navigateTo({ url: '/pages/profile/certification/certification?mode=apply' });
+  }
+},
 
   // 查看头像
   previewAvatar() {

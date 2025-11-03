@@ -90,7 +90,7 @@ Page({
         wx.stopPullDownRefresh();
         this.setData({ loading: false });
         
-        if (res.data.code === 0) {
+        if (res.data.code === 0 || res.data.code === 200) {
           const newOrders = res.data.data.list || [];
           this.setData({
             orders: this.data.page === 1 ? newOrders : this.data.orders.concat(newOrders),

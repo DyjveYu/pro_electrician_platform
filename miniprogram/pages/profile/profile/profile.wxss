@@ -210,7 +210,7 @@
 }
 
 .certification-badge {
-  margin-right: 15rpx;
+  margin-right: 12rpx;
 }
 
 .badge-text {

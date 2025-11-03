@@ -17,8 +17,8 @@
 }
 
 .logo {
-  width: 120rpx;
-  height: 120rpx;
+  width: 300rpx;
+  height: 254rpx;
   background: white;
   border-radius: 24rpx;
   margin-bottom: 32rpx;

@@ -4,26 +4,19 @@
   <view class="user-card">
     <view class="user-header">
       <view class="avatar-section" bindtap="previewAvatar">
-        <image 
-          class="avatar"
-          src="{{userInfo.avatar || '/images/default-avatar.png'}}"
-          mode="aspectFill"
-        ></image>
+        <image class="avatar" src="{{userInfo.avatar || '/assets/default-avatar.png'}}" />
+       
         <view class="role-badge {{currentRole}}">
           {{currentRole === 'electrician' ? '电工' : '用户'}}
         </view>
       </view>
       
       <view class="user-info">
-        <view class="user-name">{{userInfo.nickname || '未设置昵称'}}</view>
-        <view class="user-phone">{{userInfo.phone}}</view>
-        
-        <!-- 电工认证状态 -->
-        <view class="certification-status" wx:if="{{currentRole === 'electrician' || userInfo.isElectrician}}">
-          <text class="status-text {{userInfo.isElectrician ? 'certified' : 'uncertified'}}">
-            {{userInfo.isElectrician ? '✓ 已认证' : '⚠ 未认证'}}
-          </text>
-        </view>
+     
+         <text class="nickname">{{userInfo.nickname || userInfo.phone}}</text>
+          
+       <!-- 电工认证状态：对所有用户可见，用 certificationStatusText 显示当前状态 -->
+ 
       </view>
     </view>
     
@@ -96,14 +89,10 @@
       <view class="menu-icon">🔧</view>
       <view class="menu-content">
         <text class="menu-title">电工认证</text>
-        <text class="menu-desc">
-          {{userInfo.isElectrician ? '查看认证信息' : '申请成为电工'}}
-        </text>
+        <text class="menu-desc">{{userInfo.isElectrician ? '查看认证信息' : '申请成为电工'}}</text>
       </view>
       <view class="certification-badge">
-        <text class="badge-text {{userInfo.isElectrician ? 'certified' : 'uncertified'}}">
-          {{userInfo.isElectrician ? '已认证' : '未认证'}}
-        </text>
+       <text class="badge-text {{userInfo.certificationStatus === 'approved' ? 'certified' : (userInfo.certificationStatus === 'pending' ? 'pending' : 'uncertified')}}">{{certificationStatusText}}</text>
       </view>
       <text class="menu-arrow">></text>
     </view>

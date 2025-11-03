@@ -27,17 +27,6 @@
 
     <!-- 地址信息 -->
     <view class="form-group">
-      <!-- <view class="form-item" bindtap="chooseRegion">
-        <text class="label">所在地区</text>
-       <view class="region-selector">
-          <text class="region-text" wx:if="{{formData.province}}">
-            {{formData.province}} {{formData.city}} {{formData.district}}
-          </text>
-          <text class="placeholder" wx:else>请选择省市区</text>
-          <text class="arrow">></text>
-        </view>
-         </view>
-        -->
        <picker mode="region" value="{{regionValue}}" bindchange="onRegionChange">
           <view class="form-item">
             <text class="label">所在地区</text>
