@@ -41,7 +41,7 @@
     </view>
   </view>
 
-  <!-- 电工信息卡片 -->
+  <!-- 电工信息卡片 
   <view class="electrician-card" wx:if="{{currentRole === 'electrician' && electricianInfo}}">
     <view class="card-title">电工信息</view>
     <view class="electrician-info">
@@ -63,7 +63,7 @@
       </view>
     </view>
   </view>
-
+-->
   <!-- 菜单列表 -->
   <view class="menu-section">
     <!-- 地址管理 -->

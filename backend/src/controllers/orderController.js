@@ -188,12 +188,16 @@ class OrderController {
         ];
       }
 
-      // 按地理位置筛选（如果提供了坐标）
+      // 按地理位置筛选（暂时禁用，避免查询错误）
+      // TODO: 后续实现完整的地理位置筛选功能
       let geoFilter = {};
+      // 暂时注释掉地理位置筛选逻辑
+      /*
       if (latitude && longitude && distance) {
         // 这里可以根据实际需求实现地理位置筛选
         // 简化处理，实际应使用地理空间查询
       }
+      */
 
       // 执行分页查询
       const { count, rows } = await Order.findAndCountAll({

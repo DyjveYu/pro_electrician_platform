@@ -174,11 +174,13 @@
               {{ currentUser.current_role === 'electrician' ? '电工' : '用户' }}
             </el-tag>
           </el-descriptions-item>
+          
           <el-descriptions-item label="电工认证">
             <el-tag :type="currentUser.can_be_electrician ? 'success' : 'info'">
               {{ currentUser.can_be_electrician ? '已认证' : '未认证' }}
             </el-tag>
           </el-descriptions-item>
+       
           <el-descriptions-item label="状态">
             <el-tag :type="getStatusTagType(currentUser.status)">
               {{ getStatusText(currentUser.status) }}

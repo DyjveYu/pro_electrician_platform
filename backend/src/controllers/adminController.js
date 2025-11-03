@@ -134,7 +134,7 @@ class AdminController {
       // 使用Sequelize查询用户列表
       const { count, rows: users } = await User.findAndCountAll({
         where,
-        attributes: ['id', 'phone', 'nickname', 'current_role', 'status', 'created_at'],
+        attributes: ['id', 'phone', 'nickname', 'current_role', 'status', 'created_at', 'last_login_at','can_be_electrician'],
         order: [['id', 'DESC']],
         offset: parseInt(offset),
         limit: parseInt(limit)
@@ -243,7 +243,7 @@ class AdminController {
         const plainCert = cert.get({ plain: true });
         const userInfo = plainCert.user || {};
         
-        // 添加调试日志
+        // 添加调试日志 2025.11.3
         console.log('=== 电工数据调试 ===');
         console.log('plainCert keys:', Object.keys(plainCert));
         console.log('userInfo:', userInfo);
@@ -354,6 +354,16 @@ class AdminController {
       } else if (status === 'approved') {
         certification.approved_at = new Date();
         certification.reject_reason = null;
+        
+        // 同步更新用户表状态
+        const user = await User.findByPk(certification.user_id);
+        if (user) {
+          await user.update({ 
+            can_be_electrician: true,
+            current_role: 'electrician'
+          });
+          console.log(`用户 ${user.id} 电工认证通过，已更新用户表角色为电工`);
+        }
       }
       
       await certification.save();
