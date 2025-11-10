@@ -114,9 +114,15 @@ const Order = sequelize.define('Order', {
   },
   
   status: {
-    type: DataTypes.ENUM('pending', 'accepted', 'in_progress', 'completed', 'paid', 'cancelled', 'cancel_pending'),
-    defaultValue: 'pending',
+    type: DataTypes.ENUM('pending_payment', 'pending', 'accepted', 'in_progress', 'pending_review', 'completed', 'pending_repair_payment', 'paid', 'cancelled', 'cancel_pending', 'closed'),
+    defaultValue: 'pending_payment',
     comment: '工单状态'
+  },
+
+  prepaid_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: '预付款支付成功时间'
   },
   
   cancel_reason: {
@@ -177,6 +183,12 @@ const Order = sequelize.define('Order', {
     type: DataTypes.DATE,
     allowNull: true,
     comment: '取消时间'
+  },
+
+  reviewed_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: '用户评价时间'
   },
   
   needs_confirmation: {

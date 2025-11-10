@@ -480,6 +480,10 @@ class AdminController {
             model: ServiceType,
             as: 'serviceType',
             attributes: ['name']
+          },
+          {
+            model: Review,
+            as: 'review'
           }
         ]
       });

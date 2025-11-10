@@ -42,7 +42,13 @@ module.exports = (err, req, res, next) => {
   }
 
   // 自定义业务错误
-  if (err.status) {
+  // 兼容 AppError 等使用 statusCode 的错误类
+  if (typeof err.statusCode === 'number') {
+    return res.error(err.message, err.statusCode, err.data || {});
+  }
+
+  // 兼容使用 status 的错误对象
+  if (typeof err.status === 'number') {
     return res.error(err.message, err.status);
   }
 

@@ -275,10 +275,10 @@ class OrderAPI {
   /**
    * 电工抢单
    */
-  static takeOrder(id, quotedPrice) {
-    return API.post(`/orders/${id}/take`, { quoted_price: quotedPrice }, {
+  static takeOrder(id) {
+    return API.post(`/orders/${id}/take`, {}, {
       showLoading: true,
-      loadingText: '抢单中...'
+      loadingText: '接单中...'
     });
   }
 

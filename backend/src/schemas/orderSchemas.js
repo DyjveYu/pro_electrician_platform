@@ -95,7 +95,7 @@ const getOrdersList = Joi.object({
       'number.min': '每页数量必须大于等于1',
       'number.max': '每页数量不能超过100'
     }),
-  status: Joi.string().valid('pending', 'accepted', 'confirmed', 'in_progress', 'completed', 'cancelled').allow(null, '')
+  status: Joi.string().valid('pending_payment', 'pending', 'accepted', 'in_progress', 'pending_review', 'completed', 'pending_repair_payment', 'paid', 'cancelled', 'cancel_pending', 'closed').allow(null, '')
     .messages({
       'string.base': '状态必须是字符串',
       'any.only': '状态值无效'
@@ -192,6 +192,15 @@ const updateOrderByElectrician = Joi.object({
     .messages({
       'string.max': '工单描述不能超过1000个字符'
     }),
+  repair_content: Joi.string().min(2).max(1000).optional()
+    .messages({
+      'string.min': '维修内容至少需要2个字符',
+      'string.max': '维修内容不能超过1000个字符'
+    }),
+  repair_images: Joi.array().items(Joi.string()).max(9).default([])
+    .messages({
+      'array.max': '维修图片最多上传9张'
+    }),
   amount: Joi.number().min(0).required()
     .messages({
       'any.required': '订单金额是必填项',
@@ -222,6 +231,29 @@ const confirmCancelOrder = Joi.object({
     })
 });
 
+// 开始维修的验证Schema（电工端），可选备注
+const startOrder = Joi.object({
+  remark: Joi.string().max(500).optional()
+    .messages({
+      'string.max': '备注不能超过500个字符'
+    })
+}).optional();
+
+// 用户评价订单的验证Schema
+const reviewOrder = Joi.object({
+  rating: Joi.number().integer().min(1).max(5).required()
+    .messages({
+      'any.required': '评分是必填项',
+      'number.base': '评分必须是数字',
+      'number.min': '评分不能小于1',
+      'number.max': '评分不能大于5'
+    }),
+  comment: Joi.string().max(1000).allow('', null)
+    .messages({
+      'string.max': '评价内容不能超过1000个字符'
+    })
+}).optional();
+
 module.exports = {
   createOrder,
   getOrdersList,
@@ -231,5 +263,7 @@ module.exports = {
   confirmOrder,
   updateOrderByElectrician,
   initiateCancelOrder,
-  confirmCancelOrder
+  confirmCancelOrder,
+  startOrder,
+  reviewOrder
 };

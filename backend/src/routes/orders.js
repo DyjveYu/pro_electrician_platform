@@ -52,6 +52,19 @@ router.get(
 );
 
 /**
+ * @path /api/orders/:id/start
+ * @desc 电工开始维修
+ * @access 电工
+ */
+router.put(
+  '/:id/start',
+  authenticateToken,
+  requireRole(['electrician']),
+  validate(orderSchemas.startOrder),
+  OrderController.startOrder
+);
+
+/**
  * @path /api/orders/:id/take
  * @desc 电工抢单
  * @access 电工
@@ -101,6 +114,19 @@ router.put(
   requireRole(['user']),
   validate(orderSchemas.confirmOrder),
   OrderController.confirmOrder
+);
+
+/**
+ * @path /api/orders/:id/review
+ * @desc 用户评价订单
+ * @access 用户
+ */
+router.put(
+  '/:id/review',
+  authenticateToken,
+  requireRole(['user']),
+  validate(orderSchemas.reviewOrder),
+  OrderController.reviewOrder
 );
 
 /**

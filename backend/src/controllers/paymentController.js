@@ -5,6 +5,9 @@
 
 const Payment = require('../models/Payment');
 const Order = require('../models/Order');
+const ServiceType = require('../models/ServiceType');
+const OrderStatusLog = require('../models/OrderStatusLog');
+const Message = require('../models/Message');
 const WechatPayService = require('../utils/wechatPayService');
 
 class PaymentController {
@@ -17,7 +20,8 @@ class PaymentController {
       const {
         order_id,
         payment_method = 'wechat',
-        openid
+        openid,
+        type = 'prepay'
       } = req.body;
 
       // 验证工单
@@ -31,26 +35,40 @@ class PaymentController {
         return res.error('无权限支付此工单', 403);
       }
 
-      // 验证工单状态
-      if (order.status !== 'completed') {
-        return res.error('工单未完成，无法支付', 400);
-      }
-
-      // 验证是否已支付
-      if (order.payment_status === 'paid') {
-        return res.error('工单已支付', 400);
-      }
-
-      // 验证报价
-      if (!order.final_amount || order.final_amount <= 0) {
-        return res.error('工单报价异常', 400);
+      // 分类型校验与金额确定
+      let amount = 0;
+      let description = '';
+      if (type === 'prepay') {
+        if (order.status !== 'pending_payment') {
+          return res.error('当前工单不处于待支付预付款状态', 400);
+        }
+        // 读取服务类型预付款金额
+        const serviceType = await ServiceType.findByPk(order.service_type_id);
+        if (!serviceType || !serviceType.prepay_amount || Number(serviceType.prepay_amount) <= 0) {
+          return res.error('预付款金额未配置或无效', 400);
+        }
+        amount = Number(serviceType.prepay_amount);
+        description = `工单预付款-${serviceType.name || order.title}`;
+      } else if (type === 'repair') {
+        // 仅允许在待支付维修费状态下创建维修费支付
+        if (order.status !== 'pending_repair_payment') {
+          return res.error('当前工单不处于待支付维修费状态', 400);
+        }
+        if (!order.final_amount || Number(order.final_amount) <= 0) {
+          return res.error('工单最终金额异常', 400);
+        }
+        amount = Number(order.final_amount);
+        description = `工单支付-${order.title}`;
+      } else {
+        return res.error('无效的支付类型', 400);
       }
 
       // 检查是否已有待支付的订单
       const existingPayment = await Payment.findOne({
         where: {
           order_id: order_id,
-          status: 'pending'
+          status: 'pending',
+          type
         }
       });
       if (existingPayment) {
@@ -65,9 +83,10 @@ class PaymentController {
       const paymentData = {
         order_id,
         user_id: userId,
-        amount: order.final_amount,
+        amount: amount,
         payment_method,
-        out_trade_no
+        out_trade_no,
+        type
       };
 
       const payment = await Payment.create(paymentData);
@@ -76,11 +95,18 @@ class PaymentController {
       let paymentResult;
       if (payment_method === 'wechat') {
         const wechatPay = new WechatPayService();
+        // 30分钟超时关闭
+        const expireDate = new Date(Date.now() + 30 * 60 * 1000);
+        const formatExpire = (d) => {
+          const pad = (n) => String(n).padStart(2, '0');
+          return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+        };
         paymentResult = await wechatPay.createUnifiedOrder({
           payment_no: payment.out_trade_no,
           amount: payment.amount,
-          description: `工单支付-${order.title}`,
-          openid: openid
+          description,
+          openid: openid,
+          time_expire: type === 'prepay' ? formatExpire(expireDate) : undefined
         });
       } else if (payment_method === 'test') {
         // 测试支付
@@ -164,15 +190,49 @@ class PaymentController {
         where: { out_trade_no: payment_no }
       });
       
-      // 更新订单支付状态
+      // 根据支付类型更新订单状态
       const order = await Order.findByPk(payment.order_id);
       if (order) {
-        await Order.update({
-          status: 'paid',
-          paid_at: new Date()
-        }, {
-          where: { id: payment.order_id }
-        });
+        if (payment.type === 'prepay') {
+          await Order.update({
+            status: 'pending',
+            prepaid_at: new Date()
+          }, { where: { id: payment.order_id } });
+
+          // 状态日志与消息
+          await OrderStatusLog.create({
+            order_id: payment.order_id,
+            to_status: 'pending',
+            operator_id: userId,
+            operator_type: 'user',
+            remark: '预付款支付成功，进入待接单'
+          });
+          await Message.create({
+            user_id: order.user_id,
+            title: '预付款支付成功',
+            content: `您的工单 ${order.order_no} 预付款已支付成功，现已进入待接单。`,
+            type: 'order',
+            related_id: order.id,
+            to_status: 'unread'
+          });
+        } else {
+          // 维修费支付成功：不改变订单主状态，保持在 pending_repair_payment
+          await OrderStatusLog.create({
+            order_id: payment.order_id,
+            to_status: 'pending_repair_payment',
+            operator_id: userId,
+            operator_type: 'user',
+            remark: '维修费支付成功'
+          });
+          await Message.create({
+            user_id: order.user_id,
+            title: '维修费支付成功',
+            content: `您的工单 ${order.order_no} 维修费已支付成功，请等待电工开始维修。`,
+            type: 'order',
+            related_id: order.id,
+            to_status: 'unread'
+          });
+        }
       }
 
       res.success({
@@ -209,13 +269,48 @@ class PaymentController {
             where: { out_trade_no: verifyResult.payment_no }
           });
           
-          // 更新订单支付状态
-          await Order.update({
-            status: 'paid',
-            paid_at: new Date(verifyResult.time_end)
-          }, {
-            where: { id: payment.order_id }
-          });
+          // 按支付类型更新订单状态
+          const order = await Order.findByPk(payment.order_id);
+          if (order) {
+            if (payment.type === 'prepay') {
+              await Order.update({
+                status: 'pending',
+                prepaid_at: new Date(verifyResult.time_end)
+              }, { where: { id: payment.order_id } });
+              await OrderStatusLog.create({
+                order_id: payment.order_id,
+                to_status: 'pending',
+                operator_id: order.user_id,
+                operator_type: 'user',
+                remark: '预付款支付成功，进入待接单'
+              });
+              await Message.create({
+                user_id: order.user_id,
+                title: '预付款支付成功',
+                content: `您的工单 ${order.order_no} 预付款已支付成功，现已进入待接单。`,
+                type: 'order',
+                related_id: order.id,
+                to_status: 'unread'
+              });
+            } else {
+              // 维修费支付成功：不改变订单主状态，保持在 pending_repair_payment
+              await OrderStatusLog.create({
+                order_id: payment.order_id,
+                to_status: 'pending_repair_payment',
+                operator_id: order.user_id,
+                operator_type: 'user',
+                remark: '维修费支付成功'
+              });
+              await Message.create({
+                user_id: order.user_id,
+                title: '维修费支付成功',
+                content: `您的工单 ${order.order_no} 维修费已支付成功，请等待电工开始维修。`,
+                type: 'order',
+                related_id: order.id,
+                to_status: 'unread'
+              });
+            }
+          }
         }
         
         // 返回成功响应
@@ -270,13 +365,48 @@ class PaymentController {
               where: { out_trade_no: payment_no }
             });
             
-            // 更新订单支付状态
-            await Order.update({
-              status: 'paid',
-              paid_at: new Date()
-            }, {
-              where: { id: payment.order_id }
-            });
+            // 根据支付类型更新订单支付状态
+            const order = await Order.findByPk(payment.order_id);
+            if (order) {
+              if (payment.type === 'prepay') {
+                await Order.update({
+                  status: 'pending',
+                  prepaid_at: new Date()
+                }, { where: { id: payment.order_id } });
+                await OrderStatusLog.create({
+                  order_id: payment.order_id,
+                  to_status: 'pending',
+                  operator_id: order.user_id,
+                  operator_type: 'user',
+                  remark: '预付款支付成功，进入待接单'
+                });
+                await Message.create({
+                  user_id: order.user_id,
+                  title: '预付款支付成功',
+                  content: `您的工单 ${order.order_no} 预付款已支付成功，现已进入待接单。`,
+                  type: 'order',
+                  related_id: order.id,
+                  to_status: 'unread'
+                });
+              } else {
+                // 维修费支付成功：不改变订单主状态，保持在 pending_repair_payment
+                await OrderStatusLog.create({
+                  order_id: payment.order_id,
+                  to_status: 'pending_repair_payment',
+                  operator_id: order.user_id,
+                  operator_type: 'user',
+                  remark: '维修费支付成功'
+                });
+                await Message.create({
+                  user_id: order.user_id,
+                  title: '维修费支付成功',
+                  content: `您的工单 ${order.order_no} 维修费已支付成功，请等待电工开始维修。`,
+                  type: 'order',
+                  related_id: order.id,
+                  to_status: 'unread'
+                });
+              }
+            }
             
             // 重新查询更新后的支付记录
             const updatedPayment = await Payment.findOne({
@@ -373,8 +503,8 @@ class PaymentController {
       }
 
       // 验证支付状态
-      if (payment.status !== 'paid') {
-        return res.error('只有已支付的订单才能申请退款', 400);
+      if (payment.status !== 'success') {
+        return res.error('只有已支付成功的订单才能申请退款', 400);
       }
 
       // 检查是否已申请退款
@@ -421,8 +551,8 @@ class PaymentController {
         if (payment.payment_method === 'wechat') {
           const wechatPay = new WechatPayService();
           const refundResult = await wechatPay.refund({
-            payment_no: payment.payment_no,
-            refund_no: `RF${payment.payment_no}`,
+            payment_no: payment.out_trade_no,
+            refund_no: `RF${payment.out_trade_no}`,
             total_fee: payment.amount,
             refund_fee: payment.amount
           });

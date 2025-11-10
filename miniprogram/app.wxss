@@ -216,12 +216,7 @@ page {
   color: #1976d2;
 }
 
-.status-confirmed {
-  background-color: #e8f5e8;
-  color: #388e3c;
-}
-
-.status-in-progress {
+.status-in_progress {
   background-color: #e1f5fe;
   color: #0277bd;
 }

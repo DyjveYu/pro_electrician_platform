@@ -3,7 +3,7 @@
  * 处理工单的创建、查询、状态更新等操作
  */
 
-const { Order, User, ServiceType, OrderStatusLog, Message, sequelize } = require('../models');
+const { Order, User, ServiceType, OrderStatusLog, Message, Payment, Review, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const AppError = require('../utils/AppError');
 
@@ -73,21 +73,21 @@ class OrderController {
             latitude,
             longitude,
             estimated_amount: budget_max || budget_min || 0,
-            status: 'pending'
+            status: 'pending_payment'
           }, { transaction: t });
 
           await OrderStatusLog.create({
             order_id: created.id,
-            to_status: 'pending',
+            to_status: 'pending_payment',
             operator_id: req.user.id,
             operator_type: 'user',
-            remark: '工单创建成功'
+            remark: '工单创建成功，待支付预付款'
           }, { transaction: t });
 
           await Message.create({
             user_id: req.user.id,
             title: '工单创建成功',
-            content: `您的工单 ${created.order_no} 已创建成功，等待电工接单。`,
+            content: `您的工单 ${created.order_no} 已创建成功，请支付预付款以进入待接单。`,
             type: 'order',
             related_id: created.id,
             to_status: 'unread'
@@ -212,6 +212,23 @@ class OrderController {
         offset: (pageNumber - 1) * pageSize
       });
 
+      // 预取本页订单的维修费支付成功记录，避免N+1查询
+      const orderIds = rows.map(o => o.id);
+      const paidMap = new Map();
+      if (orderIds.length > 0) {
+        const paidPayments = await Payment.findAll({
+          where: { order_id: { [Op.in]: orderIds }, type: 'repair', status: 'success' },
+          attributes: ['order_id', 'paid_at'],
+          order: [['paid_at', 'DESC']]
+        });
+        paidPayments.forEach(p => {
+          const oid = p.order_id;
+          if (!paidMap.has(oid)) {
+            paidMap.set(oid, p.paid_at || null);
+          }
+        });
+      }
+
       // 处理图片字段
       const orders = rows.map(order => {
         const plainOrder = order.get({ plain: true });
@@ -223,6 +240,10 @@ class OrderController {
           console.error(`Order ${plainOrder.id} has invalid images JSON: ${plainOrder.images}`);
           plainOrder.images = [];
         }
+
+        // 派生字段：是否已支付维修费及支付时间
+        plainOrder.has_paid_repair = paidMap.has(plainOrder.id);
+        plainOrder.repair_paid_at = paidMap.get(plainOrder.id) || null;
         return plainOrder;
       });
 
@@ -262,9 +283,9 @@ class OrderController {
           { model: User, as: 'user', attributes: ['id', 'nickname', 'avatar', 'phone'] },
           { model: User, as: 'electrician', attributes: ['id', 'nickname', 'avatar', 'phone'] },
           { model: ServiceType, as: 'serviceType' },
-          { model: OrderStatusLog, as: 'statusLogs', include: [
-            { model: User, as: 'operator', attributes: ['id', 'username'] }
-          ]}
+          { model: Review, as: 'review' },
+          // 修正别名为定义的 'status_logs'，并暂时移除未定义的 operator 关联
+          { model: OrderStatusLog, as: 'status_logs' }
         ]
       });
 
@@ -286,10 +307,38 @@ class OrderController {
 
       // 处理图片字段
       const orderData = order.get({ plain: true });
-      orderData.images = orderData.images ? JSON.parse(orderData.images) : [];
-      if (orderData.repair_images) {
-        orderData.repair_images = JSON.parse(orderData.repair_images);
+      // 安全处理 JSON 字段：Sequelize 的 JSON 类型可能已是数组，无需再解析
+      if (Array.isArray(orderData.images)) {
+        // 已是数组，保持不变
+      } else if (typeof orderData.images === 'string') {
+        try {
+          orderData.images = JSON.parse(orderData.images);
+        } catch (e) {
+          orderData.images = [];
+        }
+      } else {
+        orderData.images = orderData.images || [];
       }
+
+      if (Array.isArray(orderData.repair_images)) {
+        // 已是数组，保持不变
+      } else if (typeof orderData.repair_images === 'string') {
+        try {
+          orderData.repair_images = JSON.parse(orderData.repair_images);
+        } catch (e) {
+          orderData.repair_images = [];
+        }
+      } else {
+        orderData.repair_images = orderData.repair_images || [];
+      }
+
+      // 派生字段：是否已支付维修费及支付时间
+      const repairPayment = await Payment.findOne({
+        where: { order_id: order.id, type: 'repair', status: 'success' },
+        order: [['paid_at', 'DESC']]
+      });
+      orderData.has_paid_repair = !!repairPayment;
+      orderData.repair_paid_at = repairPayment ? repairPayment.paid_at : null;
 
       res.success({ order: orderData });
     } catch (error) {
@@ -308,7 +357,6 @@ class OrderController {
   static async takeOrder(req, res, next) {
     try {
       const { id } = req.params;
-      const { quoted_price } = req.body;
       const electricianId = req.user.id;
       const now = new Date();
 
@@ -343,11 +391,6 @@ class OrderController {
           accepted_at: now
         };
         
-        // 如果提供了报价，则添加到更新数据中
-        if (quoted_price !== undefined) {
-          updateData.quoted_price = parseFloat(quoted_price);
-        }
-        
         // 更新工单
         await order.update(updateData, { transaction: t });
 
@@ -357,7 +400,7 @@ class OrderController {
           to_status: 'accepted',
           operator_id: electricianId,
           operator_type: 'electrician',
-          remark: `电工接单，报价: ¥${quoted_price}`,
+          remark: '电工接单',
           created_at: now
         }, { transaction: t });
 
@@ -365,7 +408,7 @@ class OrderController {
         await Message.create({
           user_id: order.user_id,
           title: '工单已被接单',
-          content: `您的工单 ${order.order_no} 已被电工接单，报价: ¥${quoted_price}`,
+          content: `您的工单 ${order.order_no} 已被电工接单，请及时确认`,
           type: 'order',
           reference_id: order.id,
           is_read: false,
@@ -374,8 +417,89 @@ class OrderController {
       });
 
       res.success({
-        message: '抢单成功，等待用户确认'
+        message: '接单成功，请核实服务地址'
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * 开始维修（电工端）
+   * @route PUT /api/orders/:id/start
+   * @access 电工
+   */
+  static async startOrder(req, res, next) {
+    try {
+      const { id } = req.params;
+      const electricianId = req.user.id;
+
+      // 查询工单
+      const order = await Order.findByPk(id);
+      if (!order) {
+        throw new AppError('工单不存在', 404);
+      }
+
+      // 角色与归属校验
+      if (req.user.current_role !== 'electrician') {
+        throw new AppError('只有电工可以开始维修', 403);
+      }
+      if (order.electrician_id !== electricianId) {
+        throw new AppError('只有接单电工可开始维修', 403);
+      }
+
+      // 幂等：已在维修中则直接返回
+      if (order.status === 'in_progress') {
+        return res.success({ message: '订单已在维修中', order_id: order.id, status: order.status });
+      }
+
+      // 状态前置条件校验
+      if (order.status !== 'pending_repair_payment') {
+        throw new AppError('当前状态不可开始维修', 400);
+      }
+
+      // 校验维修费支付成功（派生判断）
+      const repairPayment = await Payment.findOne({
+        where: { order_id: order.id, type: 'repair', status: 'success' },
+        order: [['paid_at', 'DESC']]
+      });
+      if (!repairPayment) {
+        throw new AppError('维修费未支付，无法开始维修', 400);
+      }
+
+      // 条件更新防并发：仅当仍为 pending_repair_payment 时切换为 in_progress
+      const [affected] = await Order.update(
+        { status: 'in_progress' },
+        { where: { id: order.id, status: 'pending_repair_payment' } }
+      );
+      if (affected === 0) {
+        // 重新读取状态用于幂等处理
+        const latest = await Order.findByPk(order.id);
+        if (latest && latest.status === 'in_progress') {
+          return res.success({ message: '订单已在维修中', order_id: latest.id, status: latest.status });
+        }
+        throw new AppError('状态已变更，开始维修失败，请重试', 409);
+      }
+
+      // 记录状态日志与通知消息
+      await OrderStatusLog.create({
+        order_id: order.id,
+        from_status: 'pending_repair_payment',
+        to_status: 'in_progress',
+        operator_id: electricianId,
+        operator_type: 'electrician',
+        remark: '电工开始维修'
+      });
+      await Message.create({
+        user_id: order.user_id,
+        title: '订单开始维修',
+        content: `您的工单 ${order.order_no} 已开始维修。`,
+        type: 'order',
+        related_id: order.id,
+        to_status: 'unread'
+      });
+
+      res.success({ message: '已开始维修', order_id: order.id, status: 'in_progress' });
     } catch (error) {
       next(error);
     }
@@ -421,17 +545,16 @@ class OrderController {
         throw new AppError('无权操作此工单', 403);
       }
 
-      // 验证工单状态
-      const validStatuses = ['accepted', 'confirmed', 'in_progress'];
-      if (!validStatuses.includes(order.status)) {
-        throw new AppError(`工单当前状态为 ${order.status}，无法完成`, 400);
+      // 验证工单状态：仅允许进行中状态完成服务
+      if (order.status !== 'in_progress') {
+        throw new AppError(`工单当前状态为 ${order.status}，无法完成服务`, 400);
       }
 
       // 使用事务更新工单状态
       await sequelize.transaction(async (t) => {
         // 更新工单
         const updateData = {
-          status: 'completed',
+          status: 'pending_review',
           completed_at: now
         };
         
@@ -447,22 +570,22 @@ class OrderController {
         
         await order.update(updateData, { transaction: t });
 
-        // 创建状态日志
+        // 创建状态日志：进入待评价
         await OrderStatusLog.create({
           order_id: order.id,
           from_status: order.status,
-          to_status: 'completed',
+          to_status: 'pending_review',
           operator_id: electricianId,
           operator_type: 'electrician',
-          remark: '电工完成服务',
+          remark: '电工完成服务，待用户评价',
           created_at: now
         }, { transaction: t });
 
         // 创建消息通知用户
         await Message.create({
           user_id: order.user_id,
-          title: '工单已完成',
-          content: `您的工单 ${order.order_no} 已由电工完成服务，请确认`,
+          title: '工单待评价',
+          content: `您的工单 ${order.order_no} 电工已完成服务，请前往评价。`,
           type: 'order',
           reference_id: order.id,
           is_read: false,
@@ -471,8 +594,92 @@ class OrderController {
       });
 
       res.success({
-        message: '工单已完成，等待用户确认'
+        message: '服务已完成，订单进入待评价'
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * 用户评价订单
+   * @route PUT /api/orders/:id/review
+   * @access 用户角色
+   */
+  static async reviewOrder(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { rating, comment } = req.body;
+      const userId = req.user?.id;
+      const now = new Date();
+
+      if (!req.user) {
+        return res.error('未认证用户', 401);
+      }
+      if (req.user.current_role !== 'user') {
+        return res.error('只有用户可以评价订单', 403);
+      }
+
+      const order = await Order.findByPk(id);
+      if (!order) {
+        return res.error('工单不存在', 404);
+      }
+      if (order.user_id !== userId) {
+        return res.error('无权操作此工单', 403);
+      }
+      if (order.status !== 'pending_review') {
+        return res.error('当前状态不允许评价，需为待评价', 400);
+      }
+
+      // 开始事务并更新评价与状态
+      const transaction = await sequelize.transaction();
+      try {
+        await order.update({
+          status: 'completed',
+          completed_at: now,
+          reviewed_at: now
+        }, { transaction });
+
+        // 创建评价记录（用于电工评分统计等）
+        await Review.create({
+          order_id: order.id,
+          user_id: userId,
+          electrician_id: order.electrician_id,
+          rating,
+          content: comment || null
+        }, { transaction });
+
+        await OrderStatusLog.create({
+          order_id: order.id,
+          from_status: 'pending_review',
+          to_status: 'completed',
+          operator_id: userId,
+          operator_type: 'user',
+          remark: '用户完成评价，订单已完成'
+        }, { transaction });
+
+        // 通知电工订单完成且用户已评价
+        if (order.electrician_id) {
+          await Message.create({
+            user_id: order.electrician_id,
+            title: '订单已完成',
+            content: `工单 ${order.order_no} 用户已完成评价，订单关闭。`,
+            type: 'order',
+            reference_id: order.id,
+            is_read: false,
+            created_at: now
+          }, { transaction });
+        }
+
+        await transaction.commit();
+        return res.success({
+          message: '评价成功，订单已完成',
+          order_id: order.id
+        });
+      } catch (err) {
+        await transaction.rollback();
+        throw err;
+      }
     } catch (error) {
       next(error);
     }
@@ -643,7 +850,7 @@ class OrderController {
   static async updateOrderByElectrician(req, res, next) {
     try {
       const { id } = req.params;
-      const { title, description, amount, remark } = req.body;
+      const { title, description, amount, remark, repair_content, repair_images } = req.body;
       
       // 确保用户已登录且为电工角色
       if (!req.user) {
@@ -666,7 +873,7 @@ class OrderController {
       
       // 验证工单状态
       if (order.status !== 'in_progress' && order.status !== 'accepted') {
-        return res.error('只有已接单或进行中状态的工单可以修改', 400);
+        return res.error('只有已接单状态的工单可以修改', 400);
       }
       
       // 开始事务
@@ -677,29 +884,40 @@ class OrderController {
         const updateData = {};
         if (title) updateData.title = title;
         if (description) updateData.description = description;
-        if (amount !== undefined) updateData.amount = amount;
-        
-        // 标记为需要用户确认
-        updateData.needs_confirmation = true;
-        
+        if (amount !== undefined) updateData.final_amount = amount;
+
+        // 写入维修内容与图片（如提供）
+        if (repair_content) updateData.repair_content = repair_content;
+        if (Array.isArray(repair_images) && repair_images.length > 0) {
+          updateData.repair_images = JSON.stringify(repair_images);
+        }
+
+        // 设置为待支付维修费状态
+        updateData.status = 'pending_repair_payment';
+        // 不再需要用户确认，直接进入待支付
+        updateData.needs_confirmation = false;
+
+        // 记录原状态用于日志
+        const prevStatus = order.status;
+
         await order.update(updateData, { transaction });
-        
-        // 记录修改日志
+
+        // 记录状态变更日志
         await OrderStatusLog.create({
           order_id: order.id,
-          from_status: 'in_progress',
-          to_status: 'in_progress',
+          from_status: prevStatus,
+          to_status: 'pending_repair_payment',
           operator_id: req.user.id,
           operator_type: 'electrician',
           operator_role: 'electrician',
-          remark: remark || '电工修改了订单内容和金额'
+          remark: remark || '电工更新了维修内容与金额，进入待支付维修费'
         }, { transaction });
-        
+
         // 提交事务
         await transaction.commit();
-        
+
         return res.success({
-          message: '订单修改成功，等待用户确认',
+          message: '维修金额已确认，等待用户支付',
           order_id: order.id
         });
       } catch (error) {

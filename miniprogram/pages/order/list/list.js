@@ -1,11 +1,11 @@
 // pages/order/list/list.js
+const { getOrderStatusText } = require('../../../utils/util');
 Page({
   data: {
     currentTab: 0,
     tabs: [
       { name: '待接单', status: 'pending' },
       { name: '进行中', status: 'in_progress' },
-      { name: '待支付', status: 'pending_payment' },
       { name: '已完成', status: 'completed' }
     ],
     orders: [],
@@ -92,9 +92,17 @@ Page({
         
         if (res.data.code === 0 || res.data.code === 200) {
           const newOrders = res.data.data.list || [];
+          const normalizedOrders = newOrders.map(o => {
+            const normalizedStatus = o.status === 'confirmed' ? 'in_progress' : o.status;
+            return {
+              ...o,
+              status: normalizedStatus,
+              statusText: getOrderStatusText(normalizedStatus)
+            };
+          });
           this.setData({
-            orders: this.data.page === 1 ? newOrders : this.data.orders.concat(newOrders),
-            hasMore: newOrders.length === this.data.pageSize
+            orders: this.data.page === 1 ? normalizedOrders : this.data.orders.concat(normalizedOrders),
+            hasMore: normalizedOrders.length === this.data.pageSize
           });
         } else {
           wx.showToast({ title: res.data.message || '加载失败', icon: 'none' });
@@ -168,7 +176,7 @@ Page({
     const app = getApp();
     
     wx.request({
-      url: `${app.globalData.baseUrl}/orders/${orderId}/accept`,
+      url: `${app.globalData.baseUrl}/orders/${orderId}/take`,
       method: 'POST',
       header: {
         'Authorization': `Bearer ${app.globalData.token}`

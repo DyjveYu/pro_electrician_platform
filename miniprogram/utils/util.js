@@ -195,16 +195,17 @@ const generateRandomString = (length = 8) => {
 };
 
 /**
- * 获取工单状态文本
+ * 获取订单状态文本
  */
 const getOrderStatusText = (status) => {
   const statusMap = {
     'pending': '待接单',
     'accepted': '已接单',
-    'confirmed': '已确认',
-    'in_progress': '服务中',
+    'in_progress': '维修中',
     'completed': '已完成',
-    'cancelled': '已取消'
+    'paid': '已支付',
+    'cancelled': '已取消',
+    'cancel_pending': '取消中'
   };
   return statusMap[status] || '未知状态';
 };

@@ -1,4 +1,5 @@
 // pages/order/detail/detail.js
+const { getOrderStatusText } = require('../../../utils/util');
 Page({
   data: {
     orderId: '',
@@ -18,6 +19,9 @@ Page({
         orderId: options.id,
         action: options.action || ''
       });
+      // 初始化防重复请求标记
+      this._firstShowSkipped = false;
+      this._fetchingDetail = false;
       this.loadOrderDetail();
     } else {
       wx.showToast({ title: '订单ID不能为空', icon: 'none' });
@@ -28,7 +32,11 @@ Page({
   },
 
   onShow() {
-    // 页面显示时刷新数据
+    // 页面显示时刷新数据；避免与onLoad的首次显示重复触发
+    if (!this._firstShowSkipped) {
+      this._firstShowSkipped = true;
+      return;
+    }
     if (this.data.orderId) {
       this.loadOrderDetail();
     }
@@ -40,6 +48,9 @@ Page({
 
   // 加载订单详情
   loadOrderDetail() {
+    // 避免并发重复请求触发后端限流
+    if (this._fetchingDetail) return;
+    this._fetchingDetail = true;
     const app = getApp();
     
     wx.request({
@@ -51,15 +62,42 @@ Page({
       success: (res) => {
         wx.stopPullDownRefresh();
         this.setData({ loading: false });
+        this._fetchingDetail = false;
         
-        if (res.data.code === 0) {
-          this.setData({ order: res.data.data });
-          
-          // 如果是完成订单操作，初始化表单数据
-          if (this.data.action === 'complete' && res.data.data.workContent) {
+        const code = res?.data?.code;
+        const ok = code === 0 || code === 200 || res.statusCode === 200 || res?.data?.success === true;
+        if (ok) {
+          // 兼容后端返回结构：{ data: { order: {...} } }
+          const raw = res?.data?.data?.order || res?.data?.data || {};
+          const normalizedStatus = raw.status === 'confirmed' ? 'in_progress' : raw.status;
+          const order = {
+            ...raw,
+            // 字段名映射，兼容后端字段
+            orderNumber: raw.orderNumber || raw.order_no,
+            createTime: raw.createTime || raw.created_at,
+            serviceTypeName: raw.serviceTypeName || (raw.serviceType && raw.serviceType.name) || '',
+            contactName: raw.contactName || raw.contact_name,
+            contactPhone: raw.contactPhone || raw.contact_phone,
+            address: raw.address || raw.service_address,
+            images: Array.isArray(raw.images) ? raw.images : [],
+            workContent: raw.workContent || raw.repair_content || '',
+            workImages: Array.isArray(raw.workImages) ? raw.workImages : (Array.isArray(raw.repair_images) ? raw.repair_images : []),
+            amount: raw.amount || raw.final_amount || raw.estimated_amount || ''
+          };
+
+          this.setData({ 
+            order: {
+              ...order,
+              status: normalizedStatus,
+              statusText: getOrderStatusText(normalizedStatus)
+            }
+          });
+
+          // 如果是完成订单操作，初始化表单数据（使用后端字段）
+          if (this.data.action === 'complete') {
             this.setData({
-              workContent: res.data.data.workContent || '',
-              finalAmount: res.data.data.amount ? res.data.data.amount.toString() : ''
+              workContent: order.workContent || '',
+              finalAmount: order.amount ? String(order.amount) : ''
             });
           }
         } else {
@@ -69,6 +107,7 @@ Page({
       fail: () => {
         wx.stopPullDownRefresh();
         this.setData({ loading: false });
+        this._fetchingDetail = false;
         wx.showToast({ title: '网络错误，请重试', icon: 'none' });
       }
     });
@@ -112,12 +151,14 @@ Page({
     
     wx.request({
       url: `${app.globalData.baseUrl}/orders/${this.data.orderId}/cancel`,
-      method: 'POST',
+      method: 'PUT',
       header: {
         'Authorization': `Bearer ${app.globalData.token}`
       },
       success: (res) => {
-        if (res.data.code === 0) {
+        const code = res?.data?.code;
+        const ok = code === 0 || code === 200 || res.statusCode === 200 || res?.data?.success === true;
+        if (ok) {
           wx.showToast({ title: '订单已取消', icon: 'success' });
           setTimeout(() => {
             wx.navigateBack();
@@ -136,22 +177,36 @@ Page({
   acceptOrder() {
     const app = getApp();
     
-    wx.request({
-      url: `${app.globalData.baseUrl}/orders/${this.data.orderId}/accept`,
-      method: 'POST',
-      header: {
-        'Authorization': `Bearer ${app.globalData.token}`
-      },
+    wx.showModal({
+      title: '确认接单',
+      content: '确认接下此订单并开始服务？',
+      confirmText: '接单',
       success: (res) => {
-        if (res.data.code === 0) {
-          wx.showToast({ title: '接单成功', icon: 'success' });
-          this.loadOrderDetail();
-        } else {
-          wx.showToast({ title: res.data.message || '接单失败', icon: 'none' });
-        }
-      },
-      fail: () => {
-        wx.showToast({ title: '网络错误，请重试', icon: 'none' });
+        if (!res.confirm) return;
+        
+        wx.showLoading({ title: '接单中...' });
+        wx.request({
+          url: `${app.globalData.baseUrl}/orders/${this.data.orderId}/take`,
+          method: 'POST',
+          header: {
+            'Authorization': `Bearer ${app.globalData.token}`
+          },
+          success: (res) => {
+            wx.hideLoading();
+            const code = res?.data?.code;
+            const success = code === 0 || code === 200 || res.statusCode === 200 || res?.data?.success === true;
+            if (success) {
+              wx.showToast({ title: '接单成功', icon: 'success' });
+              this.loadOrderDetail();
+            } else {
+              wx.showToast({ title: res?.data?.message || '接单失败', icon: 'none' });
+            }
+          },
+          fail: () => {
+            wx.hideLoading();
+            wx.showToast({ title: '网络错误，请重试', icon: 'none' });
+          }
+        });
       }
     });
   },

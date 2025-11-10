@@ -234,7 +234,7 @@ class WorkOrder {
   /**
    * 电工抢单
    */
-  static async takeOrder(orderId, electricianId, quotedPrice) {
+  static async takeOrder(orderId, electricianId) {
     const connection = await db.getConnection();
     
     try {
@@ -262,10 +262,10 @@ class WorkOrder {
       // 更新工单状态
       await connection.query(
         `UPDATE work_orders SET 
-         electrician_id = ?, status = 'accepted', quoted_price = ?, 
+         electrician_id = ?, status = 'accepted', 
          accepted_at = NOW(), updated_at = NOW() 
          WHERE id = ?`,
-        [electricianId, quotedPrice, orderId]
+        [electricianId, orderId]
       );
 
       await connection.commit();
@@ -292,7 +292,7 @@ class WorkOrder {
       throw new Error('工单状态不允许确认');
     }
 
-    const success = await this.updateStatus(orderId, 'confirmed', {
+    const success = await this.updateStatus(orderId, 'in_progress', {
       confirmed_at: new Date()
     });
 
@@ -309,7 +309,7 @@ class WorkOrder {
       throw new Error('工单不存在或无权限操作');
     }
 
-    if (order.status !== 'confirmed') {
+    if (order.status !== 'in_progress') {
       throw new Error('工单状态不允许开始服务');
     }
 
@@ -413,12 +413,9 @@ class WorkOrder {
         COUNT(*) as total_orders,
         COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_orders,
         COUNT(CASE WHEN status = 'accepted' THEN 1 END) as accepted_orders,
-        COUNT(CASE WHEN status = 'confirmed' THEN 1 END) as confirmed_orders,
         COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as in_progress_orders,
         COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_orders,
-        COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled_orders,
-        COALESCE(AVG(CASE WHEN status = 'completed' THEN quoted_price END), 0) as avg_price,
-        COALESCE(SUM(CASE WHEN status = 'completed' THEN quoted_price END), 0) as total_amount
+        COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled_orders
        FROM work_orders ${whereClause}`,
       params
     );

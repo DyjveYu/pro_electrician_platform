@@ -114,7 +114,7 @@
             
             <view class="order-actions">
               <button class="detail-btn" bindtap="viewOrderDetail" data-id="{{item.id}}">查看详情</button>
-              <button class="take-order-btn" bindtap="takeOrder" data-id="{{item.id}}">抢单</button>
+              <button class="take-order-btn" bindtap="takeOrder" data-id="{{item.id}}">接单</button>
             </view>
           </view>
         </view>
@@ -128,35 +128,4 @@
   </view>
 </view>
 
-<!-- 抢单报价弹窗 -->
-<view wx:if="{{showQuoteModal}}" class="modal-overlay" bindtap="closeQuoteModal">
-  <view class="quote-modal" catchtap="">
-    <view class="modal-header">
-      <text class="modal-title">输入报价</text>
-      <text class="modal-close" bindtap="closeQuoteModal">×</text>
-    </view>
-    
-    <view class="modal-content">
-      <view class="input-group">
-        <text class="input-label">您的报价（元）：</text>
-        <input 
-          class="price-input" 
-          type="digit" 
-          placeholder="请输入报价金额"
-          value="{{quotePrice}}"
-          bindinput="onQuotePriceInput"
-        />
-      </view>
-      
-      <view class="modal-tips">
-        <text class="tip-text">• 请根据订单难度合理报价</text>
-        <text class="tip-text">• 报价一经提交不可修改</text>
-      </view>
-    </view>
-    
-    <view class="modal-actions">
-      <button class="cancel-btn" bindtap="closeQuoteModal">取消</button>
-      <button class="confirm-btn" bindtap="confirmTakeOrder">确认抢单</button>
-    </view>
-  </view>
-</view>
+<!-- 已移除报价弹窗：接单改为直接调用接口 -->

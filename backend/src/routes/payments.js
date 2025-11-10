@@ -34,14 +34,14 @@ router.post('/wechat/notify',
 // 查询支付状态
 router.get('/:payment_no',
   authenticateToken,
-  validate(schemas.queryPayment),
+  validate(schemas.queryPayment, 'params'),
   PaymentController.queryPayment
 );
 
 // 获取支付列表
 router.get('/',
   authenticateToken,
-  validate(schemas.getPaymentList),
+  validate(schemas.getPaymentList, 'query'),
   PaymentController.getPaymentList
 );
 

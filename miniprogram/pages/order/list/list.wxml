@@ -124,8 +124,8 @@
           </button>
         </block>
 
-        <!-- 待支付状态 -->
-        <block wx:if="{{item.status === 'pending_payment'}}">
+        <!-- 已完成状态（根据 canPay 显示去支付） -->
+        <block wx:if="{{item.status === 'completed'}}">
           <button 
             wx:if="{{item.canPay}}"
             class="action-btn pay-btn"
@@ -134,10 +134,6 @@
           >
             去支付
           </button>
-        </block>
-
-        <!-- 已完成状态 -->
-        <block wx:if="{{item.status === 'completed'}}">
           <button 
             wx:if="{{item.canReview}}"
             class="action-btn review-btn"

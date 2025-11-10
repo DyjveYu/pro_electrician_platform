@@ -128,7 +128,7 @@ const schemas = {
     query: Joi.object({
       page: Joi.number().integer().min(1).optional(),
       limit: Joi.number().integer().min(1).max(100).optional(),
-      status: Joi.string().valid('pending', 'accepted', 'confirmed', 'in_progress', 'completed', 'cancelled').optional(),
+      status: Joi.string().valid('pending_payment', 'pending', 'accepted', 'in_progress', 'completed', 'pending_repair_payment', 'paid', 'cancelled', 'cancel_pending', 'closed').optional(),
       service_type_id: Joi.number().integer().positive().optional(),
       search: Joi.string().max(100).optional(),
       latitude: Joi.number().min(-90).max(90).optional(),
@@ -149,9 +149,6 @@ const schemas = {
   takeOrder: {
     params: Joi.object({
       id: Joi.number().integer().positive().required()
-    }),
-    body: Joi.object({
-      quoted_price: Joi.number().positive().required()
     })
   },
 
@@ -196,7 +193,7 @@ const schemas = {
       id: Joi.number().integer().positive().required()
     }),
     body: Joi.object({
-      status: Joi.string().valid('pending', 'accepted', 'confirmed', 'in_progress', 'completed', 'cancelled').required(),
+      status: Joi.string().valid('pending_payment', 'pending', 'accepted', 'in_progress', 'completed', 'pending_repair_payment', 'cancelled', 'cancel_pending', 'paid').required(),
       notes: Joi.string().max(500).optional().allow('')
     })
   },
@@ -206,6 +203,7 @@ const schemas = {
     body: Joi.object({
       order_id: Joi.number().integer().positive().required(),
       payment_method: Joi.string().valid('wechat', 'test').default('wechat'),
+      type: Joi.string().valid('prepay', 'repair').default('prepay'),
       openid: Joi.string().when('payment_method', {
         is: 'wechat',
         then: Joi.required(),
@@ -233,7 +231,7 @@ const schemas = {
     query: Joi.object({
       page: Joi.number().integer().min(1).optional(),
       limit: Joi.number().integer().min(1).max(100).optional(),
-      status: Joi.string().valid('pending', 'paid', 'failed', 'timeout').optional(),
+      status: Joi.string().valid('pending', 'success', 'failed', 'refunded', 'expired').optional(),
       payment_method: Joi.string().valid('wechat', 'test').optional(),
       search: Joi.string().max(100).optional()
     })

@@ -20,13 +20,13 @@ const OrderStatusLog = sequelize.define('OrderStatusLog', {
   },
   
   from_status: {
-    type: DataTypes.STRING(20),
+    type: DataTypes.STRING(32),
     allowNull: true,
     comment: '原状态'
   },
   
   to_status: {
-    type: DataTypes.STRING(20),
+    type: DataTypes.STRING(32),
     allowNull: false,
     comment: '新状态'
   },

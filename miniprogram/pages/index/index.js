@@ -48,10 +48,7 @@ Page({
     ],
     // 电工角色的附近订单
     nearbyOrders: [],
-    loading: false,
-    showQuoteModal: false,
-    selectedOrderId: null,
-    quotePrice: ''
+    loading: false
   },
 
   onLoad() {
@@ -137,6 +134,7 @@ Page({
    */
   async loadNearbyOrders() {
     try {
+      console.log('[DEBUG] 开始加载附近订单...');
       this.setData({ loading: true });
       
       const params = {
@@ -146,32 +144,67 @@ Page({
         status: 'pending' // 只获取待接单的订单
       };
       
+      console.log('[DEBUG] 请求参数:', params);
+      
       // 暂时移除地理位置参数，避免后端查询错误
       // TODO: 后续实现完整的地理位置筛选功能
       
       const response = await OrderAPI.getOrderList(params);
+      console.log('[DEBUG] API响应:', response);
       
-      if (response.code === 0) {
-        const orders = response.data.orders || response.data.list || [];
-        const formattedOrders = orders.map(order => ({
-          ...order,
-          statusText: getOrderStatusText(order.status),
-          createdTime: formatTime(order.created_at),
-          distance: this.calculateDistance(order.latitude, order.longitude)
-        }));
+      if (response.code === 200) {
+        // 根据后端返回的数据结构，订单数据在response.data.list中
+        const orders = response.data.list || response.data.orders || [];
+        console.log('[DEBUG] 解析到的订单数据:', orders);
+        console.log('[DEBUG] 订单数量:', orders.length);
+        
+        if (orders.length === 0) {
+          console.log('[DEBUG] 没有找到可接的订单');
+          this.setData({
+            nearbyOrders: []
+          });
+          wx.showToast({
+            title: '暂无可接订单',
+            icon: 'none'
+          });
+          return;
+        }
+        
+        const formattedOrders = orders.map(order => {
+          console.log('[DEBUG] 处理订单:', order.id, order.title);
+          const normalizedStatus = order.status === 'confirmed' ? 'in_progress' : order.status;
+          return {
+            ...order,
+            status: normalizedStatus,
+            statusText: getOrderStatusText(normalizedStatus),
+            createdTime: formatTime(order.created_at),
+            distance: this.calculateDistance(order.latitude, order.longitude)
+          };
+        });
+        
+        console.log('[DEBUG] 格式化后的订单:', formattedOrders);
         
         this.setData({
           nearbyOrders: formattedOrders
         });
+        
+        console.log('[DEBUG] 订单数据已设置到页面');
+      } else {
+        console.error('[DEBUG] API返回错误:', response.message);
+        wx.showToast({
+          title: response.message || '加载订单失败',
+          icon: 'none'
+        });
       }
     } catch (error) {
-      console.error('加载附近订单失败:', error);
+      console.error('[DEBUG] 加载附近订单失败:', error);
       wx.showToast({
         title: '加载订单失败',
         icon: 'none'
       });
     } finally {
       this.setData({ loading: false });
+      console.log('[DEBUG] 加载附近订单完成');
     }
   },
 
@@ -180,31 +213,60 @@ Page({
    */
   async loadRecentOrders() {
     try {
+      console.log('[DEBUG] 开始加载最近订单...');
       this.setData({ loading: true });
       
-      const response = await OrderAPI.getOrderList({
+      const params = {
         page: 1,
         limit: 5,
         my_orders: true
-      });
+      };
       
-      if (response.code === 0) {
-        const orders = response.data.orders || response.data.list || [];
-        const formattedOrders = orders.map(order => ({
-          ...order,
-          statusText: getOrderStatusText(order.status),
-          createdTime: formatTime(order.created_at)
-        }));
+      console.log('[DEBUG] 请求参数:', params);
+      
+      const response = await OrderAPI.getOrderList(params);
+      console.log('[DEBUG] API响应:', response);
+      
+      if (response.code === 200) {
+        // 统一数据结构处理：优先使用list字段，兼容orders字段
+        const orders = response.data.list || response.data.orders || [];
+        console.log('[DEBUG] 解析到的订单数据:', orders);
+        console.log('[DEBUG] 订单数量:', orders.length);
+        
+        if (orders.length === 0) {
+          console.log('[DEBUG] 没有找到最近订单，使用模拟数据');
+          // 保持使用模拟数据
+          return;
+        }
+        
+        const formattedOrders = orders.map(order => {
+          console.log('[DEBUG] 处理订单:', order.id, order.title);
+          return {
+            ...order,
+            statusText: getOrderStatusText(order.status),
+            createdTime: formatTime(order.created_at)
+          };
+        });
+        
+        console.log('[DEBUG] 格式化后的订单:', formattedOrders);
         
         this.setData({
           recentOrders: formattedOrders
         });
+        
+        console.log('[DEBUG] 最近订单数据已设置到页面');
+      } else {
+        console.error('[DEBUG] API返回错误:', response.message);
+        console.log('[DEBUG] 保持使用模拟数据');
+        // 保持使用模拟数据
       }
     } catch (error) {
-      console.error('加载最近订单失败:', error);
+      console.error('[DEBUG] 加载最近订单失败:', error);
+      console.log('[DEBUG] 保持使用模拟数据');
       // 保持使用模拟数据
     } finally {
       this.setData({ loading: false });
+      console.log('[DEBUG] 加载最近订单完成');
     }
   },
 
@@ -280,7 +342,7 @@ Page({
   },
 
   /**
-   * 抢单（电工角色）
+   * 接单（电工角色）
    */
   takeOrder(e) {
     const orderId = e.currentTarget.dataset.id;
@@ -293,83 +355,13 @@ Page({
       return;
     }
     
-    // 显示报价弹窗
-    this.setData({
-      showQuoteModal: true,
-      selectedOrderId: orderId,
-      quotePrice: ''
+    // 跳转到订单详情页，在详情页进行接单确认
+    wx.navigateTo({
+      url: `/pages/order/detail/detail?id=${orderId}&action=take`
     });
   },
 
-  /**
-   * 关闭报价弹窗
-   */
-  closeQuoteModal() {
-    this.setData({
-      showQuoteModal: false,
-      selectedOrderId: null,
-      quotePrice: ''
-    });
-  },
-
-  /**
-   * 报价输入
-   */
-  onQuotePriceInput(e) {
-    this.setData({
-      quotePrice: e.detail.value
-    });
-  },
-
-  /**
-   * 确认抢单
-   */
-  async confirmTakeOrder() {
-    const { selectedOrderId, quotePrice } = this.data;
-    
-    if (!quotePrice || parseFloat(quotePrice) <= 0) {
-      wx.showToast({
-        title: '请输入有效报价',
-        icon: 'none'
-      });
-      return;
-    }
-    
-    try {
-      wx.showLoading({ title: '提交中...' });
-      
-      const response = await OrderAPI.takeOrder({
-        order_id: selectedOrderId,
-        quoted_price: parseFloat(quotePrice)
-      });
-      
-      if (response.code === 0) {
-        wx.showToast({
-          title: '抢单成功',
-          icon: 'success'
-        });
-        
-        // 关闭弹窗
-        this.closeQuoteModal();
-        
-        // 重新加载订单列表
-        this.loadNearbyOrders();
-      } else {
-        wx.showToast({
-          title: response.message || '抢单失败',
-          icon: 'none'
-        });
-      }
-    } catch (error) {
-      console.error('抢单失败:', error);
-      wx.showToast({
-        title: '抢单失败',
-        icon: 'none'
-      });
-    } finally {
-      wx.hideLoading();
-    }
-  },
+  
 
   /**
    * 刷新订单列表

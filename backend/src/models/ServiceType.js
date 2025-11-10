@@ -42,6 +42,18 @@ const ServiceType = sequelize.define('ServiceType', {
     defaultValue: 'active',
     comment: '状态'
   }
+  ,
+  prepay_amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true,
+    comment: '预付款金额（用于预约时展示与下单）'
+  }
+  ,
+  prepay_note: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: '预付款备注说明'
+  }
   
 }, {
   tableName: 'service_types',

@@ -22,6 +22,7 @@ const uploadRoutes = require('./routes/upload');
 const systemRoutes = require('./routes/system');
 const userRoutes = require('./routes/users');
 const electricianRoutes = require('./routes/electricians');
+const { initPaymentTimeoutJob } = require('./services/paymentTimeoutJob');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -40,7 +41,9 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use(responseFormatter);
 
 // 限流中间件
-app.use(rateLimiter());
+// 提高全局限流阈值，避免正常页面加载被误伤
+// 说明：默认每分钟10次对于小程序多接口并发较容易触发429，这里提高到100次/分钟。
+app.use(rateLimiter({ windowMs: 60 * 1000, max: 100 }));
 
 // API路由
 app.use('/api/auth', authRoutes);
@@ -54,6 +57,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/system', systemRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/electricians', electricianRoutes);
+
 
 // 健康检查
 app.get('/health', (req, res) => {
@@ -77,6 +81,9 @@ app.listen(PORT, () => {
   console.log(`🚀 服务器启动成功，端口: ${PORT}`);
   console.log(`📖 API文档: http://localhost:${PORT}/api/v1`);
   console.log(`🏥 健康检查: http://localhost:${PORT}/health`);
+  // 启动预付款超时关闭任务（临时停用以避免启动报错）
+  // initPaymentTimeoutJob();
+  // 枚举值变更由你手动执行数据库更新，不在应用启动中处理
 });
 
 // 消息中心功能已添加

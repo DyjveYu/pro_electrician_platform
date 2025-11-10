@@ -24,7 +24,8 @@ class WechatPayService {
       amount,
       description,
       openid,
-      trade_type = 'JSAPI'
+      trade_type = 'JSAPI',
+      time_expire
     } = orderData;
 
     // 测试环境使用模拟支付
@@ -44,6 +45,11 @@ class WechatPayService {
       trade_type: trade_type,
       openid: openid
     };
+
+    // 设置超时时间（格式：yyyyMMddHHmmss），仅当提供时
+    if (time_expire) {
+      params.time_expire = time_expire;
+    }
 
     // 生成签名
     params.sign = this.generateSign(params);
