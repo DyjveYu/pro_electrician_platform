@@ -13,6 +13,11 @@ Page({
     completing: false
   },
 
+  // 自定义返回：始终回到“我的订单”Tab
+  backToOrders() {
+    wx.switchTab({ url: '/pages/order/list/list' });
+  },
+
   onLoad(options) {
     if (options.id) {
       this.setData({ 

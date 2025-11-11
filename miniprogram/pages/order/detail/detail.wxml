@@ -1,4 +1,13 @@
 <!--pages/order/detail/detail.wxml-->
+<!-- 自定义导航栏 -->
+<view class="custom-nav">
+  <view class="nav-left" bindtap="backToOrders">
+    <text class="back-icon">←</text>
+  </view>
+  <view class="nav-title">订单详情</view>
+  <view class="nav-right"></view>
+  </view>
+
 <view class="container" wx:if="{{!loading}}">
   <view wx:if="{{order}}">
     <!-- 订单状态 -->
