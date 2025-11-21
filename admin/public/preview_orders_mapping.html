@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>订单列表与展示层状态映射预览</title>
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif; margin: 24px; color: #333; }
+      h1 { font-size: 18px; margin: 0 0 12px; }
+      .note { color: #666; margin-bottom: 16px; }
+      .tab { display: inline-block; padding: 8px 12px; border: 1px solid #1890ff; color: #1890ff; border-radius: 6px; margin-bottom: 16px; }
+      .list { display: grid; grid-template-columns: 1fr; gap: 12px; }
+      .item { border: 1px solid #eee; border-radius: 8px; padding: 12px; }
+      .row { display: flex; justify-content: space-between; margin-bottom: 8px; }
+      .status { font-weight: 600; }
+      .badge { padding: 2px 8px; border-radius: 12px; font-size: 12px; color: #fff; }
+      .b-warning { background: #faad14; }
+      .b-primary { background: #1677ff; }
+      .b-success { background: #52c41a; }
+      .b-danger { background: #ff4d4f; }
+      .b-info { background: #2db7f5; }
+    </style>
+  </head>
+  <body>
+    <h1>订单列表与“展示层状态映射”预览</h1>
+    <div class="note">此页用于快速核对映射规则与“我的订单”单一 Tab 的呈现效果；实际小程序 UI 请在微信开发者工具中预览。</div>
+    <div class="tab">我的订单</div>
+    <div id="list" class="list"></div>
+    <script>
+      function mapOrderToDisplayStatus(order) {
+        const st = order.status;
+        const hasPaidPrepay = !!order.prepaid_at || !!order.has_paid_prepay;
+        const hasPaidRepair = !!order.has_paid_repair;
+        const hasReview = !!order.has_review;
+        const electricianId = order.electrician_id || null;
+        const finalAmount = order.final_amount ?? order.amount ?? null;
+        const repairContent = order.repair_content ?? order.completion_note ?? null;
+
+        if (st === 'cancelled' || st === 'closed') return { code: 'closed', text: '交易关闭', tag: 'b-danger' };
+        if (st === 'cancel_pending') return { code: 'cancel_pending', text: '交易关闭（取消处理中）', tag: 'b-danger' };
+        if (st === 'pending_payment' || (st === 'pending' && !hasPaidPrepay)) return { code: 'prepay_pending', text: '待支付预付款', tag: 'b-info' };
+        if (st === 'pending' && hasPaidPrepay && !electricianId) return { code: 'waiting_accept', text: '待接单', tag: 'b-warning' };
+        if (st === 'accepted') {
+          const needRepairPay = ((finalAmount && Number(finalAmount) > 0) || !!repairContent) && !hasPaidRepair;
+          if (needRepairPay) return { code: 'repair_pay_pending', text: '待支付维修费', tag: 'b-info' };
+          return { code: 'accepted', text: '已接单', tag: 'b-primary' };
+        }
+        if (st === 'pending_repair_payment') {
+          if (!hasPaidRepair) return { code: 'repair_pay_pending', text: '待支付维修费', tag: 'b-info' };
+          return { code: 'in_progress', text: '维修中', tag: 'b-primary' };
+        }
+        if (st === 'in_progress') return { code: 'in_progress', text: '维修中', tag: 'b-primary' };
+        if (st === 'completed') return hasReview ? { code: 'completed', text: '已完成', tag: 'b-success' } : { code: 'pending_review', text: '待评价', tag: 'b-warning' };
+        return { code: 'unknown', text: '未知状态', tag: 'b-info' };
+      }
+
+      const sample = [
+        { id: 1, order_no: 'WO-PP', status: 'pending_payment', user_id: 100 },
+        { id: 2, order_no: 'WO-PD', status: 'pending', prepaid_at: '2025-01-01T10:00:00Z', electrician_id: null },
+        { id: 3, order_no: 'WO-AC', status: 'accepted', electrician_id: 201 },
+        { id: 4, order_no: 'WO-RP', status: 'pending_repair_payment', final_amount: 299, repair_content: '更换线缆', has_paid_repair: false },
+        { id: 5, order_no: 'WO-IP', status: 'in_progress', electrician_id: 202 },
+        { id: 6, order_no: 'WO-PR', status: 'completed', has_review: false },
+        { id: 7, order_no: 'WO-CO', status: 'completed', has_review: true },
+        { id: 8, order_no: 'WO-CL', status: 'cancelled' },
+        { id: 9, order_no: 'WO-CX', status: 'cancel_pending' }
+      ];
+
+      const list = document.getElementById('list');
+      sample.forEach(o => {
+        const d = mapOrderToDisplayStatus(o);
+        const el = document.createElement('div');
+        el.className = 'item';
+        el.innerHTML = `
+          <div class=\"row\"><div>工单号：<b>${o.order_no}</b></div><div class=\"badge ${d.tag}\">${d.text}</div></div>
+          <div class=\"row\"><div>数据库状态：${o.status}</div><div>展示状态代码：${d.code}</div></div>
+        `;
+        list.appendChild(el);
+      });
+    </script>
+  </body>
+</html>

@@ -2,14 +2,24 @@
 .container {
   background-color: #f5f5f5;
   min-height: 100vh;
-  padding-bottom: 120rpx;
+  padding-bottom: 180rpx;
+}
+
+.content-wrapper {
+  padding: 20rpx;
+}
+
+/* 卡片样式 */
+.card {
+  border-radius: 16rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.08);
+  margin-bottom: 20rpx;
 }
 
 /* 订单状态 */
 .status-section {
   background-color: #fff;
   padding: 40rpx 30rpx;
-  margin-bottom: 20rpx;
   display: flex;
   align-items: center;
 }
@@ -227,6 +237,13 @@
   margin-bottom: 15rpx;
 }
 
+.form-value {
+  font-size: 28rpx;
+  color: #333;
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
 .work-content-input {
   width: 100%;
   min-height: 200rpx;
@@ -370,74 +387,116 @@
   color: #999;
 }
 
-/* 操作按钮 */
-.action-section {
+/* 底部操作栏 */
+.bottom-bar {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 30rpx;
   background-color: #fff;
-  border-top: 2rpx solid #f0f0f0;
-  display: flex;
-  gap: 20rpx;
+  border-top: 1rpx solid #e5e5e5;
+  z-index: 1001;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
-.action-btn {
-  flex: 1;
+.bottom-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16rpx 24rpx;
+  gap: 16rpx;
+  flex-wrap: nowrap;
+}
+
+/* 客服按钮 */
+.service-btn {
+  width: 120rpx;
   height: 88rpx;
-  border-radius: 8rpx;
-  font-size: 28rpx;
+  background-color: #fff;
+  border: 1rpx solid #e5e5e5;
+  border-radius: 44rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 22rpx;
+  color: #666;
+}
+
+.service-btn::after {
+  border: none;
+}
+
+.service-icon {
+  font-size: 36rpx;
+  margin-bottom: 4rpx;
+  line-height: 1;
+}
+
+.service-text {
+  font-size: 22rpx;
+  color: #666;
+}
+
+/* 操作按钮区域 */
+.action-area {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* 主要操作按钮 */
+.main-action-btn {
+  min-width: 180rpx;
+  height: 88rpx;
+  border-radius: 44rpx;
+  font-size: 32rpx;
   font-weight: 600;
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0 30rpx;
 }
 
-.action-btn::after {
+.main-action-btn::after {
   border: none;
 }
 
-.cancel-btn {
-  background-color: #fafafa;
+.main-action-btn.primary {
+  background: linear-gradient(90deg, #07c160 0%, #06ae56 100%);
+  color: #fff;
+  box-shadow: 0 4rpx 12rpx rgba(7, 193, 96, 0.3);
+}
+
+.main-action-btn.secondary {
+  background-color: #f7f7f7;
   color: #666;
-  border: 2rpx solid #e0e0e0;
 }
 
-.accept-btn {
-  background-color: #1976d2;
+.main-action-btn.pay {
+  background: linear-gradient(90deg, #07c160 0%, #06ae56 100%);
   color: #fff;
+  box-shadow: 0 4rpx 12rpx rgba(7, 193, 96, 0.3);
 }
 
-.complete-btn {
-  background-color: #4caf50;
-  color: #fff;
+.main-action-btn.disabled {
+  background: #cccccc !important;
+  color: #999 !important;
+  box-shadow: none !important;
 }
 
-.complete-btn.disabled {
-  background-color: #ccc;
+/* 取消订单链接 */
+.cancel-order-link {
+  text-align: center;
+  padding: 12rpx 0;
+  font-size: 24rpx;
   color: #999;
-}
-
-.contact-btn {
-  background-color: #ff9800;
-  color: #fff;
-}
-
-.confirm-btn {
-  background-color: #2196f3;
-  color: #fff;
-}
-
-.pay-btn {
-  background-color: #f44336;
-  color: #fff;
-}
-
-.review-btn {
-  background-color: #9c27b0;
-  color: #fff;
 }
 
 /* 空状态 */

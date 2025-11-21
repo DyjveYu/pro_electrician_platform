@@ -7,7 +7,9 @@ App({
     isLogin: false,
     currentRole: 'user', // user | electrician
     systemInfo: null,
-    location: null
+    location: null,
+    // 支付方式全局配置：生产默认微信支付wechat；开发可自动走测试支付test
+    paymentMethod: 'test'
   },
 
   onLaunch() {
@@ -18,9 +20,7 @@ App({
     
     // 检查登录状态
     this.checkLoginStatus();
-    
-    // 获取位置权限
-    this.getLocationPermission();
+    // 位置权限不在启动阶段申请，避免重复弹窗；在真正需要定位的页面再调用
   },
 
   onShow() {

@@ -7,7 +7,7 @@
 
 /* 用户信息卡片 */
 .user-card {
-  background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%);
+  background: linear-gradient(135deg, #0F9D58 0%, #A5D6A7 100%);
   margin: 20rpx;
   border-radius: 16rpx;
   padding: 40rpx 30rpx;
@@ -186,7 +186,7 @@
   align-items: center;
   justify-content: center;
   font-size: 32rpx;
-  background-color: #f0f0f0;
+  background-color: #fff;
   border-radius: 12rpx;
   margin-right: 20rpx;
 }
@@ -244,9 +244,9 @@
   width: 100%;
   height: 88rpx;
   background-color: #fff;
-  color: #f44336;
+  color: #ff9800;
   font-size: 28rpx;
-  border: 2rpx solid #f44336;
+  border: 2rpx solid #ff9800;
   border-radius: 12rpx;
   display: flex;
   align-items: center;
@@ -258,6 +258,6 @@
 }
 
 .logout-btn:active {
-  background-color: #f44336;
+  background-color: #ff9800;
   color: #fff;
 }

@@ -1,12 +1,11 @@
 // pages/order/list/list.js
-const { getOrderStatusText } = require('../../../utils/util');
+const { getDisplayStatusText, mapOrderToDisplayStatus } = require('../../../utils/util');
 Page({
   data: {
+    // 单一“我的订单”Tab
     currentTab: 0,
     tabs: [
-      { name: '待接单', status: 'pending' },
-      { name: '进行中', status: 'in_progress' },
-      { name: '已完成', status: 'completed' }
+      { name: '我的订单', status: 'all' }
     ],
     orders: [],
     loading: false,
@@ -41,17 +40,11 @@ Page({
     }
   },
 
-  // 切换Tab
+  // 切换Tab（当前仅一个Tab，预留兼容）
   switchTab(e) {
     const index = e.currentTarget.dataset.index;
     if (index !== this.data.currentTab) {
-      this.setData({
-        currentTab: index,
-        orders: [],
-        page: 1,
-        hasMore: true
-      });
-      this.loadOrders();
+      this.setData({ currentTab: index });
     }
   },
 
@@ -72,7 +65,6 @@ Page({
     this.setData({ loading: true });
     
     const app = getApp();
-    const currentStatus = this.data.tabs[this.data.currentTab].status;
     
     wx.request({
       url: `${app.globalData.baseUrl}/orders`,
@@ -81,10 +73,10 @@ Page({
         'Authorization': `Bearer ${app.globalData.token}`
       },
       data: {
-        status: currentStatus,
+        // 统一为“我的订单”：用户查看自己的订单；电工查看自己接的订单
+        my_orders: true,
         page: this.data.page,
-        pageSize: this.data.pageSize,
-        role: app.globalData.currentRole
+        limit: this.data.pageSize
       },
       success: (res) => {
         wx.stopPullDownRefresh();
@@ -93,11 +85,18 @@ Page({
         if (res.data.code === 0 || res.data.code === 200) {
           const newOrders = res.data.data.list || [];
           const normalizedOrders = newOrders.map(o => {
-            const normalizedStatus = o.status === 'confirmed' ? 'in_progress' : o.status;
+            const display = mapOrderToDisplayStatus(o);
+            
+            // 字段映射和格式化
             return {
               ...o,
-              status: normalizedStatus,
-              statusText: getOrderStatusText(normalizedStatus)
+              statusText: display.text,
+              displayStatus: display.code,
+              orderNumber: o.orderNumber || o.order_no,
+              createTime: this.formatOrderTime(o.createTime || o.created_at),
+              serviceTypeName: o.title || o.serviceTypeName || (o.serviceType && o.serviceType.name) || '未知服务',
+              // 计算操作权限
+              ...this.computeActionFlags(o)
             };
           });
           this.setData({
@@ -219,7 +218,35 @@ Page({
     });
   },
 
-  // 格式化时间
+  // 格式化订单时间
+  formatOrderTime(time) {
+    if (!time) return '';
+    const date = new Date(time);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hour = String(date.getHours()).padStart(2, '0');
+    const minute = String(date.getMinutes()).padStart(2, '0');
+    const second = String(date.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+  },
+
+  // 计算操作权限
+  computeActionFlags(order) {
+    const app = getApp();
+    const currentRole = app.globalData.currentRole || 'user';
+    const status = order.status;
+    
+    return {
+      canCancel: (currentRole === 'user' && (status === 'pending' || status === 'in_progress')),
+      canAccept: (currentRole === 'electrician' && status === 'pending'),
+      canComplete: (currentRole === 'electrician' && status === 'in_progress'),
+      canPay: (currentRole === 'user' && status === 'completed' && !order.has_paid_repair),
+      canReview: (currentRole === 'user' && status === 'completed' && !order.has_review)
+    };
+  },
+
+  // 格式化相对时间（保留原方法，可能其他地方用到）
   formatTime(timestamp) {
     const date = new Date(timestamp);
     const now = new Date();

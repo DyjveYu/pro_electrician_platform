@@ -142,7 +142,7 @@ class OrderController {
       const where = {};
       const pageNumber = parseInt(page);
       const pageSize = parseInt(limit);
-      
+
       // 根据用户角色设置查询条件
       if (userRole === 'user') {
         // 普通用户只能查看自己的订单
@@ -212,21 +212,44 @@ class OrderController {
         offset: (pageNumber - 1) * pageSize
       });
 
-      // 预取本页订单的维修费支付成功记录，避免N+1查询
+      // 预取本页订单的支付与评价信息，避免N+1查询
       const orderIds = rows.map(o => o.id);
-      const paidMap = new Map();
+      const repairPaidMap = new Map();
+      const hasReviewSet = new Set();
+      const prepayPaidMap = new Map();
       if (orderIds.length > 0) {
-        const paidPayments = await Payment.findAll({
+        // 维修费支付成功
+        const repairPaidPayments = await Payment.findAll({
           where: { order_id: { [Op.in]: orderIds }, type: 'repair', status: 'success' },
           attributes: ['order_id', 'paid_at'],
           order: [['paid_at', 'DESC']]
         });
-        paidPayments.forEach(p => {
+        repairPaidPayments.forEach(p => {
           const oid = p.order_id;
-          if (!paidMap.has(oid)) {
-            paidMap.set(oid, p.paid_at || null);
+          if (!repairPaidMap.has(oid)) {
+            repairPaidMap.set(oid, p.paid_at || null);
           }
         });
+
+        // 预付款支付成功（冗余检查），虽然订单表有 prepaid_at，这里仍兼容以支付表为准
+        const prepayPaidPayments = await Payment.findAll({
+          where: { order_id: { [Op.in]: orderIds }, type: 'prepay', status: 'success' },
+          attributes: ['order_id', 'paid_at'],
+          order: [['paid_at', 'DESC']]
+        });
+        prepayPaidPayments.forEach(p => {
+          const oid = p.order_id;
+          if (!prepayPaidMap.has(oid)) {
+            prepayPaidMap.set(oid, p.paid_at || null);
+          }
+        });
+
+        // 是否存在评价
+        const reviews = await Review.findAll({
+          where: { order_id: { [Op.in]: orderIds } },
+          attributes: ['order_id']
+        });
+        reviews.forEach(r => hasReviewSet.add(r.order_id));
       }
 
       // 处理图片字段
@@ -242,8 +265,79 @@ class OrderController {
         }
 
         // 派生字段：是否已支付维修费及支付时间
-        plainOrder.has_paid_repair = paidMap.has(plainOrder.id);
-        plainOrder.repair_paid_at = paidMap.get(plainOrder.id) || null;
+        plainOrder.has_paid_repair = repairPaidMap.has(plainOrder.id);
+        plainOrder.repair_paid_at = repairPaidMap.get(plainOrder.id) || null;
+
+        // 派生字段：是否已支付预付款及支付时间（优先使用订单表的 prepaid_at）
+        plainOrder.has_paid_prepay = !!plainOrder.prepaid_at || prepayPaidMap.has(plainOrder.id);
+        plainOrder.prepay_paid_at = plainOrder.prepaid_at || prepayPaidMap.get(plainOrder.id) || null;
+
+        // 派生字段：是否已有评价
+        plainOrder.has_review = hasReviewSet.has(plainOrder.id);
+
+        // 展示层状态映射（不改变数据库枚举）
+        const st = plainOrder.status;
+        let displayCode = 'unknown';
+        let displayText = '未知状态';
+
+        // 交易关闭类
+        if (st === 'cancelled' || st === 'closed') {
+          displayCode = 'closed';
+          displayText = '交易关闭';
+        } else if (st === 'cancel_pending') {
+          displayCode = 'cancel_pending';
+          displayText = '交易关闭（取消处理中）';
+        }
+        // 待支付预付款
+        else if (st === 'pending_payment' || (st === 'pending' && !plainOrder.has_paid_prepay)) {
+          displayCode = 'prepay_pending';
+          displayText = '待支付预付款';
+        }
+        // 待接单（已支付预付款，且未分配电工）
+        else if (st === 'pending' && plainOrder.has_paid_prepay && !plainOrder.electrician_id) {
+          displayCode = 'waiting_accept';
+          displayText = '待接单';
+        }
+        // 已接单（accepted），如已填写金额/维修内容但未支付维修费，则仍显示“待支付维修费”
+        else if (st === 'accepted') {
+          const needRepairPay = ((plainOrder.final_amount && Number(plainOrder.final_amount) > 0) || !!plainOrder.repair_content) && !plainOrder.has_paid_repair;
+          if (needRepairPay) {
+            displayCode = 'repair_pay_pending';
+            displayText = '待支付维修费';
+          } else {
+            displayCode = 'accepted';
+            displayText = '已接单';
+          }
+        }
+        // 待支付维修费阶段
+        else if (st === 'pending_repair_payment') {
+          if (!plainOrder.has_paid_repair) {
+            displayCode = 'repair_pay_pending';
+            displayText = '待支付维修费';
+          } else {
+            // 如果用户已支付维修费，但状态尚未切到 in_progress，由电工通过开始维修接口进行转换
+            displayCode = 'in_progress';
+            displayText = '维修中';
+          }
+        }
+        // 维修中
+        else if (st === 'in_progress') {
+          displayCode = 'in_progress';
+          displayText = '维修中';
+        }
+        // 已完成/待评价
+        else if (st === 'completed') {
+          if (plainOrder.has_review) {
+            displayCode = 'completed';
+            displayText = '已完成';
+          } else {
+            displayCode = 'pending_review';
+            displayText = '待评价';
+          }
+        }
+
+        plainOrder.display_status = displayCode;
+        plainOrder.display_status_text = displayText;
         return plainOrder;
       });
 
@@ -276,7 +370,7 @@ class OrderController {
       const { id } = req.params;
       const userId = req.user.id;
       const userRole = req.user.current_role;
-      
+
       // 查询工单详情（包含关联数据）
       const order = await Order.findByPk(id, {
         include: [
@@ -298,10 +392,10 @@ class OrderController {
       if (userRole === 'user' && order.user_id !== userId) {
         throw new AppError('无权查看此工单', 403);
       }
-      
-      if (userRole === 'electrician' && 
-          order.electrician_id !== userId && 
-          order.status !== 'pending') {
+
+      if (userRole === 'electrician' &&
+        order.electrician_id !== userId &&
+        order.status !== 'pending') {
         throw new AppError('无权查看此工单', 403);
       }
 
@@ -339,6 +433,14 @@ class OrderController {
       });
       orderData.has_paid_repair = !!repairPayment;
       orderData.repair_paid_at = repairPayment ? repairPayment.paid_at : null;
+
+      // ✅ 新增：派生字段：是否已支付预付款及支付时间
+      const prepayPayment = await Payment.findOne({
+        where: { order_id: order.id, type: 'prepay', status: 'success' },
+        order: [['paid_at', 'DESC']]
+      });
+      orderData.has_paid_prepay = !!orderData.prepaid_at || !!prepayPayment;
+      orderData.prepay_paid_at = orderData.prepaid_at || (prepayPayment ? prepayPayment.paid_at : null);
 
       res.success({ order: orderData });
     } catch (error) {
@@ -390,7 +492,7 @@ class OrderController {
           status: 'accepted',
           accepted_at: now
         };
-        
+
         // 更新工单
         await order.update(updateData, { transaction: t });
 
@@ -518,7 +620,7 @@ class OrderController {
       const { id } = req.params;
       // 兼容两种参数名称
       const repair_content = req.body.repair_content || req.body.completion_note || null;
-      
+
       // 处理图片参数，确保是数组
       let repair_images = [];
       if (req.body.repair_images && Array.isArray(req.body.repair_images)) {
@@ -557,17 +659,17 @@ class OrderController {
           status: 'pending_review',
           completed_at: now
         };
-        
+
         // 只有当提供了维修内容时才更新
         if (repair_content !== null) {
           updateData.repair_content = repair_content;
         }
-        
+
         // 只有当提供了维修图片时才更新
         if (repair_images.length > 0) {
           updateData.repair_images = JSON.stringify(repair_images);
         }
-        
+
         await order.update(updateData, { transaction: t });
 
         // 创建状态日志：进入待评价
@@ -761,7 +863,7 @@ class OrderController {
       next(error);
     }
   }
-  
+
   /**
    * 用户确认工单
    * @route PUT /api/orders/:id/confirm
@@ -775,7 +877,7 @@ class OrderController {
       try {
         const { id } = req.params;
         const { confirmed } = req.body;
-        
+
         // 确保用户已登录且为用户角色
         if (!req.user) {
           return res.error('未认证用户', 401);
@@ -783,33 +885,33 @@ class OrderController {
         if (req.user.current_role !== 'user') {
           return res.error('只有用户角色可以确认工单', 403);
         }
-        
+
         // 查找工单
         const order = await Order.findByPk(id);
         if (!order) {
           return res.error('工单不存在', 404);
         }
-        
+
         // 验证工单所有权
         if (order.user_id !== req.user.id) {
           return res.error('无权操作此工单', 403);
         }
-        
+
         // 验证工单状态
         if (order.status !== 'accepted') {
           return res.error('只有已接单状态的工单可以确认', 400);
         }
-        
+
         // 开始事务
         const transaction = await sequelize.transaction();
-        
+
         try {
           // 更新工单状态为进行中
           await order.update({
             status: 'in_progress',
             confirmed_at: new Date()
           }, { transaction });
-          
+
           // 记录状态变更日志
           await OrderStatusLog.create({
             order_id: order.id,
@@ -820,10 +922,10 @@ class OrderController {
             operator_role: 'user',
             remark: '用户确认工单，开始服务'
           }, { transaction });
-          
+
           // 提交事务
           await transaction.commit();
-          
+
           return res.success({
             message: '工单确认成功',
             order_id: order.id
@@ -851,7 +953,7 @@ class OrderController {
     try {
       const { id } = req.params;
       const { title, description, amount, remark, repair_content, repair_images } = req.body;
-      
+
       // 确保用户已登录且为电工角色
       if (!req.user) {
         return res.error('未认证用户', 401);
@@ -859,26 +961,26 @@ class OrderController {
       if (req.user.current_role !== 'electrician') {
         return res.error('只有电工角色可以修改订单', 403);
       }
-      
+
       // 查找工单
       const order = await Order.findByPk(id);
       if (!order) {
         return res.error('工单不存在', 404);
       }
-      
+
       // 验证电工是否为该工单的负责人
       if (order.electrician_id !== req.user.id) {
         return res.error('您不是该工单的负责电工', 403);
       }
-      
+
       // 验证工单状态
       if (order.status !== 'in_progress' && order.status !== 'accepted') {
         return res.error('只有已接单状态的工单可以修改', 400);
       }
-      
+
       // 开始事务
       const transaction = await sequelize.transaction();
-      
+
       try {
         // 更新工单信息
         const updateData = {};
@@ -941,7 +1043,7 @@ class OrderController {
   static async confirmOrderUpdate(req, res, next) {
     try {
       const { id } = req.params;
-      
+
       // 确保用户已登录且为用户角色
       if (!req.user) {
         return res.error('未认证用户', 401);
@@ -949,38 +1051,38 @@ class OrderController {
       if (req.user.current_role !== 'user') {
         return res.error('只有用户角色可以确认订单修改', 403);
       }
-      
+
       // 查找工单
       const order = await Order.findByPk(id);
       if (!order) {
         return res.error('工单不存在', 404);
       }
-      
+
       // 验证工单所有权
       if (order.user_id !== req.user.id) {
         return res.error('无权操作此工单', 403);
       }
-      
+
       // 验证工单状态
       if (order.status !== 'in_progress' && order.status !== 'accepted') {
         return res.error('只有已接单或进行中状态的工单可以确认修改', 400);
       }
-      
+
       // 验证是否需要确认
       if (!order.needs_confirmation) {
         return res.error('当前订单没有待确认的修改', 400);
       }
-      
+
       // 开始事务
       const transaction = await sequelize.transaction();
-      
+
       try {
         // 更新工单状态
         await order.update({
           needs_confirmation: false,
           confirmed_at: new Date()
         }, { transaction });
-        
+
         // 记录状态变更日志
         await OrderStatusLog.create({
           order_id: order.id,
@@ -991,10 +1093,10 @@ class OrderController {
           operator_role: 'user',
           remark: '用户确认了订单修改'
         }, { transaction });
-        
+
         // 提交事务
         await transaction.commit();
-        
+
         return res.success({
           message: '订单修改确认成功',
           order_id: order.id
@@ -1021,32 +1123,32 @@ class OrderController {
     try {
       const { id } = req.params;
       const { reason } = req.body;
-      
+
       // 确保用户已登录
       if (!req.user) {
         return res.error('未认证用户', 401);
       }
-      
+
       // 验证用户角色
       if (!['user', 'electrician'].includes(req.user.current_role)) {
         return res.error('无权操作', 403);
       }
-      
+
       // 查找工单
       const order = await Order.findByPk(id);
       if (!order) {
         return res.error('工单不存在', 404);
       }
-      
+
       // 验证操作权限
       if (req.user.current_role === 'user' && order.user_id !== req.user.id) {
         return res.error('无权操作此工单', 403);
       }
-      
+
       if (req.user.current_role === 'electrician' && order.electrician_id !== req.user.id) {
         return res.error('无权操作此工单', 403);
       }
-      
+
       // 验证工单状态
       // 用户可以取消待接单、已接单和进行中的订单，电工可以取消已接单和进行中的订单
       if (req.user.current_role === 'user') {
@@ -1056,15 +1158,15 @@ class OrderController {
       } else if (order.status !== 'accepted' && order.status !== 'in_progress') {
         return res.error('只有已接单或进行中状态的工单可以发起取消', 400);
       }
-      
+
       // 检查是否已经有取消请求
       if (order.status === 'cancel_pending') {
         return res.error('该工单已有取消请求，等待对方确认', 400);
       }
-      
+
       // 开始事务
       const transaction = await sequelize.transaction();
-      
+
       try {
         // 如果是用户取消待接单状态的订单，直接取消
         if (req.user.current_role === 'user' && order.status === 'pending') {
@@ -1074,7 +1176,7 @@ class OrderController {
             cancel_reason: reason,
             cancelled_at: new Date()
           }, { transaction });
-          
+
           // 记录状态变更日志
           await OrderStatusLog.create({
             order_id: order.id,
@@ -1084,10 +1186,10 @@ class OrderController {
             operator_type: req.user.current_role,
             remark: `${req.user.current_role === 'user' ? '用户' : '电工'}取消了待接单状态的订单：${reason}`
           }, { transaction });
-          
+
           // 提交事务
           await transaction.commit();
-          
+
           return res.success({
             message: '订单已取消',
             order_id: order.id
@@ -1101,7 +1203,7 @@ class OrderController {
             cancel_initiated_at: new Date(),
             cancel_confirm_status: 'pending'
           }, { transaction });
-          
+
           // 记录状态变更日志
           await OrderStatusLog.create({
             order_id: order.id,
@@ -1111,10 +1213,10 @@ class OrderController {
             operator_type: req.user.current_role,
             remark: `${req.user.current_role === 'user' ? '用户' : '电工'}发起取消订单请求：${reason}`
           }, { transaction });
-          
+
           // 提交事务
           await transaction.commit();
-          
+
           return res.success({
             message: '取消订单请求已发起，等待对方确认',
             order_id: order.id
@@ -1142,56 +1244,56 @@ class OrderController {
     try {
       const { id } = req.params;
       const { cancel_reason } = req.body;
-      
+
       // 确保用户已登录
       if (!req.user) {
         return res.error('未认证用户', 401);
       }
-      
+
       // 验证用户角色
       if (!['user', 'electrician'].includes(req.user.current_role)) {
         return res.error('无权操作', 403);
       }
-      
+
       // 查找工单
       const order = await Order.findByPk(id);
       if (!order) {
         return res.error('工单不存在', 404);
       }
-      
+
       // 验证操作权限
       if (req.user.current_role === 'user' && order.user_id !== req.user.id) {
         return res.error('无权操作此工单', 403);
       }
-      
+
       if (req.user.current_role === 'electrician' && order.electrician_id !== req.user.id) {
         return res.error('无权操作此工单', 403);
       }
-      
+
       // 验证工单状态
       if (order.status !== 'cancel_pending') {
         return res.error('只有处于待确认取消状态的工单可以确认取消', 400);
       }
-      
+
       // 验证确认方不是发起方
       if (order.cancel_initiator_id === req.user.id) {
         return res.error('您是取消请求的发起方，无需再次确认', 400);
       }
-      
+
       // 开始事务
       const transaction = await sequelize.transaction();
-      
+
       try {
         // 更新工单状态为已取消
-      await order.update({
-        status: 'cancelled',
-        cancel_confirm_status: 'confirmed',
-        cancel_confirmed_at: new Date(),
-        cancel_confirmer_id: req.user.id,
-        cancel_reason: cancel_reason || order.cancel_reason, // 使用传入的取消原因或保留原有原因
-        cancelled_at: new Date() // 设置取消时间
-      }, { transaction });
-        
+        await order.update({
+          status: 'cancelled',
+          cancel_confirm_status: 'confirmed',
+          cancel_confirmed_at: new Date(),
+          cancel_confirmer_id: req.user.id,
+          cancel_reason: cancel_reason || order.cancel_reason, // 使用传入的取消原因或保留原有原因
+          cancelled_at: new Date() // 设置取消时间
+        }, { transaction });
+
         // 记录状态变更日志
         await OrderStatusLog.create({
           order_id: order.id,
@@ -1202,10 +1304,10 @@ class OrderController {
           operator_role: req.user.current_role,
           remark: `${req.user.current_role === 'user' ? '用户' : '电工'}确认取消订单：${cancel_reason}`
         }, { transaction });
-        
+
         // 提交事务
         await transaction.commit();
-        
+
         return res.success({
           message: '订单已成功取消',
           order_id: order.id

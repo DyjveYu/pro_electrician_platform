@@ -63,7 +63,7 @@
 .amount-value {
   font-size: 48rpx;
   font-weight: 600;
-  color: #f44336;
+  color: #0F9D58;
 }
 
 /* 支付方式 */
@@ -169,7 +169,7 @@
 .pay-btn {
   width: 100%;
   height: 88rpx;
-  background-color: #f44336;
+  background: linear-gradient(90deg, #0F9D58 0%, #81C784 100%);
   color: #fff;
   font-size: 32rpx;
   font-weight: 600;
@@ -181,10 +181,17 @@
 }
 
 .pay-btn.disabled {
-  background-color: #ccc;
+  background-color: #bdbdbd;
   color: #999;
 }
 
 .pay-btn::after {
   border: none;
+}
+
+/* 自动拉起提示文案 */
+.auto-tip {
+  margin-top: 10rpx;
+  font-size: 26rpx;
+  color: #666;
 }

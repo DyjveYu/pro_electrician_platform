@@ -43,14 +43,14 @@ const createOrder = Joi.object({
       'string.min': '服务地址至少需要5个字符',
       'string.max': '服务地址不能超过200个字符'
     }),
-  latitude: Joi.number().min(-90).max(90).required()
+  latitude: Joi.number().min(-90).max(90).allow(null).optional()
     .messages({
       'any.required': '纬度是必填项',
       'number.base': '纬度必须是数字',
       'number.min': '纬度必须在-90到90之间',
       'number.max': '纬度必须在-90到90之间'
     }),
-  longitude: Joi.number().min(-180).max(180).required()
+  longitude: Joi.number().min(-180).max(180).allow(null).optional()
     .messages({
       'any.required': '经度是必填项',
       'number.base': '经度必须是数字',

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>自动微信支付改动预览</title>
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif; margin: 0; background: #f5f5f5; color: #1f2937; }
+      .container { max-width: 900px; margin: 40px auto; background: #fff; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.06); padding: 24px; }
+      h1 { font-size: 20px; margin: 0 0 16px; }
+      .item { margin: 14px 0; padding: 14px; border: 1px solid #e5e7eb; border-radius: 8px; }
+      .item b { display: inline-block; margin-bottom: 6px; color: #111827; }
+      .ok { color: #16a34a; }
+      code { background: #f3f4f6; padding: 2px 6px; border-radius: 6px; }
+      .note { font-size: 13px; color: #6b7280; margin-top: 20px; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>自动微信支付改动预览（说明页）</h1>
+      <div class="item">
+        <b>自动拉起支付</b>
+        <div>进入支付页后自动调用 <code>createPayment</code> 并拉起 <code>wx.requestPayment</code>。</div>
+        <div class="ok">代码位置：<code>miniprogram/pages/payment/payment/payment.js → loadOrderInfo() / startPayment()</code></div>
+      </div>
+      <div class="item">
+        <b>金额展示</b>
+        <div>支付金额取自创建支付的返回 <code>amount</code> 字段，页面实时展示。</div>
+        <div class="ok">代码位置：<code>miniprogram/pages/payment/payment/payment.js → startPayment()</code> 与 <code>payment.wxml</code></div>
+      </div>
+      <div class="item">
+        <b>移除支付方式选择</b>
+        <div>简化为固定微信支付，展示“自动拉起微信支付”的提示与“重试支付”按钮。</div>
+        <div class="ok">代码位置：<code>miniprogram/pages/payment/payment/payment.wxml</code></div>
+      </div>
+      <div class="item">
+        <b>openid 兼容（开发环境）</b>
+        <div>开发环境（<code>baseUrl</code> 含 <code>localhost/3000</code>）下自动生成 <code>MOCK_OPENID_xxx</code> 满足后端 Joi 校验。</div>
+        <div class="ok">代码位置：<code>miniprogram/pages/payment/payment/payment.js → resolveOpenId()</code></div>
+      </div>
+      <div class="item">
+        <b>返回结构兼容</b>
+        <div>支持从后端返回的 <code>pay_params</code> 结构解析支付参数。</div>
+        <div class="ok">代码位置：<code>miniprogram/pages/payment/payment/payment.js → processPayment()</code></div>
+      </div>
+      <div class="item">
+        <b>失败流程与跳转</b>
+        <div>失败时提示“支付失败，请重新发起支付”，随后跳转至“我的订单”Tab，再打开订单详情（可重新支付或取消）。</div>
+        <div class="ok">代码位置：<code>miniprogram/pages/payment/payment/payment.js → processPayment()</code></div>
+      </div>
+      <p class="note">说明：此页用于核对改动与交互逻辑，实际支付需在微信开发者工具中预览并触发。</p>
+    </div>
+  </body>
+</html>

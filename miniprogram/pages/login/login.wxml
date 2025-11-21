@@ -5,13 +5,11 @@
     <view class="logo">
       <image class="logo" src="/images/icons/logo.png"></image>
       </view>
-    <text class="title">电工维修</text>
   </view>
 
   <!-- 登录表单 -->
   <view class="login-form">
-    <view class="form-title">手机号登录</view>
-    <view class="form-subtitle">输入手机号码，获取验证码</view>
+    <view class="form-title">数字赋能电工，服务贴心到家</view>
     
     <!-- 手机号输入 -->
     <view class="form-group">
@@ -56,11 +54,11 @@
       {{loginButtonText}}
     </view>
 
-    <!-- 测试环境提示 -->
+    <!-- 测试环境提示 
     <view class="test-tip" wx:if="{{showTestTip}}">
       <view class="tip-title">测试环境</view>
       <view class="tip-content">验证码：{{testCode}}</view>
-    </view>
+    </view>-->
 
       <!-- 协议条款 -->
   <view class="agreement">

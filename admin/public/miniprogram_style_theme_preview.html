@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>小程序绿色渐变主题预览</title>
+    <style>
+      :root {
+        --green-deep: #0F9D58;
+        --green-light: #A5D6A7;
+        --green-mid: #81C784;
+      }
+      html, body { height: 100%; }
+      body {
+        margin: 0; padding: 24px; color: #333;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        background: linear-gradient(180deg, var(--green-deep) 0%, var(--green-light) 100%);
+      }
+      .header {
+        background: linear-gradient(180deg, var(--green-deep) 0%, var(--green-mid) 100%);
+        color: #fff; border-radius: 12px; padding: 12px 16px; margin-bottom: 16px;
+        display: flex; justify-content: space-between; align-items: center;
+      }
+      .tab { color: #fff; font-weight: 600; }
+      .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      .card { background: #fff; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 16px; }
+      .card h3 { font-size: 16px; margin: 0 0 8px; }
+      .muted { color: #666; font-size: 12px; }
+      .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+      .b-accept { background: #e0f2f1; color: var(--green-deep); }
+      .b-progress { background: #e0f2f1; color: #2E7D32; }
+      .b-complete { background: #e8f5e9; color: #2E7D32; }
+      .actions { display: flex; gap: 8px; margin-top: 12px; }
+      .btn { padding: 8px 12px; border-radius: 24px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.08); font-weight: 600; }
+      .btn-primary { background: linear-gradient(90deg, var(--green-deep) 0%, var(--green-mid) 100%); color: #000; }
+      .btn-secondary { background: #f5f5f5; color: #000; border: 1px solid #e0e0e0; }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <div>电工维修平台</div>
+      <div class="tab">我的订单</div>
+    </div>
+    <div class="cards">
+      <div class="card">
+        <h3>订单号：WO-001 <span class="badge b-accept">已接单</span></h3>
+        <div class="muted">服务地址：上海市浦东新区滨江大道 88 号</div>
+        <div class="muted">问题描述：插座松动导致接触不良</div>
+        <div class="actions">
+          <button class="btn btn-secondary">取消订单</button>
+          <button class="btn btn-primary">联系电工</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>订单号：WO-002 <span class="badge b-progress">维修中</span></h3>
+        <div class="muted">服务地址：北京市朝阳区望京街道 2 号</div>
+        <div class="muted">问题描述：配电箱更换</div>
+        <div class="actions">
+          <button class="btn btn-primary">联系用户</button>
+          <button class="btn btn-primary">完成订单</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>订单号：WO-003 <span class="badge b-complete">已完成</span></h3>
+        <div class="muted">服务地址：杭州市滨江区长河街道 66 号</div>
+        <div class="muted">问题描述：灯具安装</div>
+        <div class="actions">
+          <button class="btn btn-primary">去支付</button>
+          <button class="btn btn-primary">评价</button>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

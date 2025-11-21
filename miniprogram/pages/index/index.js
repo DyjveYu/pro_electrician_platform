@@ -219,7 +219,8 @@ Page({
       const params = {
         page: 1,
         limit: 5,
-        my_orders: true
+        my_orders: true,
+        status: 'completed'
       };
       
       console.log('[DEBUG] 请求参数:', params);
@@ -229,10 +230,14 @@ Page({
       
       if (response.code === 200) {
         // 统一数据结构处理：优先使用list字段，兼容orders字段
-        const orders = response.data.list || response.data.orders || [];
+        let orders = response.data.list || response.data.orders || [];
         console.log('[DEBUG] 解析到的订单数据:', orders);
         console.log('[DEBUG] 订单数量:', orders.length);
-        
+
+        // 仅保留已完成订单，并按时间倒序
+        orders = orders.filter(o => o.status === 'completed')
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
         if (orders.length === 0) {
           console.log('[DEBUG] 没有找到最近订单，使用模拟数据');
           // 保持使用模拟数据
@@ -309,6 +314,23 @@ Page({
    * 创建订单（用户角色）
    */
   createOrder() {
+    // 检查登录状态
+    const app = getApp();
+    if (!app.globalData.token || !app.globalData.userInfo) {
+      wx.showToast({
+        title: '请先登录',
+        icon: 'none',
+        duration: 1500
+      });
+      setTimeout(() => {
+        wx.navigateTo({
+          url: '/pages/login/login'
+        });
+      }, 1500);
+      return;
+    }
+    
+    // 检查用户角色
     if (this.data.currentRole !== 'user') {
       wx.showToast({
         title: '请切换到用户身份',
@@ -317,6 +339,7 @@ Page({
       return;
     }
     
+    // 跳转到创建订单页
     wx.navigateTo({
       url: '/pages/order/create/create'
     });

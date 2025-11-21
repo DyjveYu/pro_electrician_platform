@@ -64,32 +64,39 @@ class PaymentController {
       }
 
       // 检查是否已有待支付的订单
-      const existingPayment = await Payment.findOne({
-        where: {
-          order_id: order_id,
-          status: 'pending',
-          type
-        }
-      });
-      if (existingPayment) {
-        return res.error('已有待支付的订单，请先完成支付', 400);
-      }
+let payment = await Payment.findOne({
+  where: {
+    order_id: order_id,
+    status: 'pending',
+    type
+  }
+});
 
-      // 生成商户订单号
-      const now = new Date();
-      const out_trade_no = `PAY${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`;
-      
-      // 创建支付记录
-      const paymentData = {
-        order_id,
-        user_id: userId,
-        amount: amount,
-        payment_method,
-        out_trade_no,
-        type
-      };
+// ✅ 如果已有 pending 订单，复用它；否则创建新的
+if (!payment) {
+  // 生成商户订单号
+  const now = new Date();
+  const out_trade_no = `PAY${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`;
+  
+  // 创建支付记录
+  const paymentData = {
+    order_id,
+    user_id: userId,
+    amount: amount,
+    payment_method,
+    out_trade_no,
+    type
+  };
 
-      const payment = await Payment.create(paymentData);
+  payment = await Payment.create(paymentData);
+} else {
+  // 复用已有的支付订单，更新金额（防止金额变化）
+  await payment.update({ 
+    amount: amount,
+    payment_method 
+  });
+  console.log(`复用已有支付订单: ${payment.id}, out_trade_no: ${payment.out_trade_no}`);
+}
 
       // 根据支付方式处理
       let paymentResult;

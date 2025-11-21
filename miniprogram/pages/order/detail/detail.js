@@ -10,12 +10,19 @@ Page({
     workContent: '',
     workImages: [],
     finalAmount: '',
-    completing: false
+    completing: false,
+    // 支付相关
+    paying: false
+    ,
+    // 已接单，电工修改
+    updateAmount: '',
+    updateContent: '',
+    updating: false
   },
 
   onLoad(options) {
     if (options.id) {
-      this.setData({ 
+      this.setData({
         orderId: options.id,
         action: options.action || ''
       });
@@ -52,7 +59,7 @@ Page({
     if (this._fetchingDetail) return;
     this._fetchingDetail = true;
     const app = getApp();
-    
+
     wx.request({
       url: `${app.globalData.baseUrl}/orders/${this.data.orderId}`,
       method: 'GET',
@@ -63,13 +70,20 @@ Page({
         wx.stopPullDownRefresh();
         this.setData({ loading: false });
         this._fetchingDetail = false;
-        
+
         const code = res?.data?.code;
         const ok = code === 0 || code === 200 || res.statusCode === 200 || res?.data?.success === true;
         if (ok) {
           // 兼容后端返回结构：{ data: { order: {...} } }
           const raw = res?.data?.data?.order || res?.data?.data || {};
           const normalizedStatus = raw.status === 'confirmed' ? 'in_progress' : raw.status;
+          const prepayAmount = (raw.serviceType && raw.serviceType.prepay_amount) ||
+            raw.prepay_amount ||
+            raw.estimated_amount ||
+            raw.amount ||
+            30;
+          const repairAmount = raw.final_amount ?? raw.repair_amount ?? raw.amount ?? raw.estimated_amount ?? '';
+          const prefillUpdateAmount = repairAmount;
           const order = {
             ...raw,
             // 字段名映射，兼容后端字段
@@ -82,16 +96,35 @@ Page({
             images: Array.isArray(raw.images) ? raw.images : [],
             workContent: raw.workContent || raw.repair_content || '',
             workImages: Array.isArray(raw.workImages) ? raw.workImages : (Array.isArray(raw.repair_images) ? raw.repair_images : []),
-            amount: raw.amount || raw.final_amount || raw.estimated_amount || ''
+            // 优先从 serviceType 获取预付款金额，其次从订单字段
+            amount: prepayAmount,
+            repairAmount,
+            prefillUpdateAmount
           };
 
-          this.setData({ 
+          // 计算底部操作权限标记，避免按钮不显示
+          const appRole = app.globalData.currentRole || 'user';
+          const flags = this.computeActionFlags({ ...order, status: normalizedStatus }, appRole);
+          this.setData({
             order: {
               ...order,
               status: normalizedStatus,
-              statusText: getOrderStatusText(normalizedStatus)
+              statusText: getOrderStatusText(normalizedStatus),
+              ...flags
             }
           });
+
+          if (flags.canSubmitCompletedUpdate) {
+            this.setData({
+              updateAmount: order.prefillUpdateAmount ? String(order.prefillUpdateAmount) : '',
+              updateContent: order.workContent || ''
+            });
+          } else {
+            this.setData({
+              updateAmount: '',
+              updateContent: ''
+            });
+          }
 
           // 如果是完成订单操作，初始化表单数据（使用后端字段）
           if (this.data.action === 'complete') {
@@ -111,6 +144,22 @@ Page({
         wx.showToast({ title: '网络错误，请重试', icon: 'none' });
       }
     });
+  },
+
+  // 基于订单状态与当前角色计算底部操作权限
+  computeActionFlags(order, role) {
+    const st = order.status;
+    const hasReview = !!(order.has_review || order.reviewed_at);
+    // 基础权限
+    const canCancel = st === 'pending' || st === 'in_progress';
+    const canAccept = role === 'electrician' && st === 'pending';
+    const canComplete = role === 'electrician' && st === 'in_progress';
+    const canConfirmAmount = role === 'user' && (st === 'pending_payment' || st === 'pending_repair_payment');
+    const canPay = role === 'user' && (st === 'pending_payment' || st === 'pending_repair_payment');
+    const canReview = role === 'user' && st === 'completed' && !hasReview;
+    const canSubmitCompletedUpdate = role === 'electrician' && (st === 'accepted' || st === 'pending_repair_payment');
+    const canPayRepairFee = role === 'user' && st === 'pending_repair_payment';
+    return { canCancel, canAccept, canComplete, canConfirmAmount, canPay, canReview, canSubmitCompletedUpdate, canPayRepairFee };
   },
 
   // 预览图片
@@ -148,7 +197,7 @@ Page({
   // 执行取消订单
   performCancelOrder() {
     const app = getApp();
-    
+
     wx.request({
       url: `${app.globalData.baseUrl}/orders/${this.data.orderId}/cancel`,
       method: 'PUT',
@@ -176,14 +225,14 @@ Page({
   // 接单（电工）
   acceptOrder() {
     const app = getApp();
-    
+
     wx.showModal({
       title: '确认接单',
-      content: '确认接下此订单并开始服务？',
+      content: '确认接下此订单？',
       confirmText: '接单',
       success: (res) => {
         if (!res.confirm) return;
-        
+
         wx.showLoading({ title: '接单中...' });
         wx.request({
           url: `${app.globalData.baseUrl}/orders/${this.data.orderId}/take`,
@@ -225,6 +274,18 @@ Page({
     });
   },
 
+  onUpdateAmountInput(e) {
+    this.setData({
+      updateAmount: e.detail.value
+    });
+  },
+
+  onUpdateContentInput(e) {
+    this.setData({
+      updateContent: e.detail.value
+    });
+  },
+
   // 选择维修图片
   chooseWorkImage() {
     const that = this;
@@ -252,18 +313,18 @@ Page({
   // 完成订单
   completeOrder() {
     if (!this.validateCompleteForm()) return;
-    
+
     if (this.data.completing) return;
-    
+
     this.setData({ completing: true });
-    
+
     const app = getApp();
     const completeData = {
       workContent: this.data.workContent,
       workImages: this.data.workImages,
       finalAmount: parseFloat(this.data.finalAmount)
     };
-    
+
     wx.request({
       url: `${app.globalData.baseUrl}/orders/${this.data.orderId}/complete`,
       method: 'POST',
@@ -289,6 +350,57 @@ Page({
     });
   },
 
+  submitUpdate() {
+    if (this.data.updating) return;
+
+    if (!this.validateUpdateForm()) return;
+
+    this.setData({ updating: true });
+
+    const app = getApp();
+    const content = this.data.updateContent.trim();
+    const payload = {
+      amount: parseFloat(this.data.updateAmount),
+      remark: content,
+      repair_content: content
+    };
+
+    wx.request({
+      url: `${app.globalData.baseUrl}/orders/${this.data.orderId}/update`,
+      method: 'PUT',
+      header: {
+        'Authorization': `Bearer ${app.globalData.token}`
+      },
+      data: payload,
+      success: (res) => {
+        this.setData({ updating: false });
+        const ok = res?.data?.code === 0 || res?.data?.success === true || res.statusCode === 200;
+        if (ok) {
+          wx.showToast({ title: '提交成功', icon: 'success' });
+          this.loadOrderDetail();
+        } else {
+          wx.showToast({ title: res.data?.message || '提交失败', icon: 'none' });
+        }
+      },
+      fail: () => {
+        this.setData({ updating: false });
+        wx.showToast({ title: '网络错误，请重试', icon: 'none' });
+      }
+    });
+  },
+
+  validateUpdateForm() {
+    if (!this.data.updateContent.trim()) {
+      wx.showToast({ title: '请输入维修内容', icon: 'none' });
+      return false;
+    }
+    if (!this.data.updateAmount || parseFloat(this.data.updateAmount) <= 0) {
+      wx.showToast({ title: '请输入正确的金额', icon: 'none' });
+      return false;
+    }
+    return true;
+  },
+
   // 验证完成订单表单
   validateCompleteForm() {
     if (!this.data.workContent.trim()) {
@@ -302,17 +414,153 @@ Page({
     return true;
   },
 
-  // 去支付
-  goToPay() {
-    wx.navigateTo({
-      url: `/pages/payment/payment?orderId=${this.data.orderId}`
+  // 去支付 - 直接调用微信支付
+  async goToPay() {
+    return this.handlePayment('prepay');
+  },
+
+  async goToRepairPay() {
+    return this.handlePayment('repair');
+  },
+
+  async handlePayment(type) {
+    if (this.data.paying) return;
+    this.setData({ paying: true });
+
+    try {
+      const app = getApp();
+      const isDev = /localhost|127\.0\.0\.1|:3000/.test(app.globalData.baseUrl || '');
+      const method = app.globalData.paymentMethod || (isDev ? 'test' : 'wechat');
+      const openid = method === 'wechat' ? await this.resolveOpenId() : undefined;
+
+      const { PaymentAPI } = require('../../../utils/api');
+      const result = await PaymentAPI.createPayment({
+        order_id: this.data.orderId,
+        payment_method: method,
+        type,
+        openid
+      });
+
+      this.setData({ paying: false });
+
+      const payload = result.data || result;
+      if (payload && (payload.success || payload.pay_params)) {
+        const payParams = payload.pay_params || payload;
+        if (method === 'wechat') {
+          this.processPayment(payParams);
+        } else {
+          this.processTestPayment(payload.payment_no);
+          this.paymentSuccess();
+        }
+      } else {
+        wx.showToast({
+          title: result.message || '支付创建失败',
+          icon: 'none'
+        });
+      }
+    } catch (err) {
+      this.setData({ paying: false });
+      wx.showToast({
+        title: err.message || '支付异常',
+        icon: 'none'
+      });
+    }
+  },
+
+  // 拉起微信支付
+  processPayment(payParams) {
+    wx.requestPayment({
+      timeStamp: String(payParams.timeStamp),
+      nonceStr: payParams.nonceStr,
+      package: payParams.package,
+      signType: payParams.signType || 'RSA',
+      paySign: payParams.paySign,
+      success: () => {
+        this.paymentSuccess();
+      },
+      fail: () => {
+        wx.showToast({
+          title: '支付失败，请重新发起支付',
+          icon: 'none'
+        });
+        // 刷新当前页面订单状态
+        this.loadOrderDetail();
+      }
+    });
+  },
+
+  // 处理测试支付
+  async processTestPayment(payment_no) {
+    try {
+      const { PaymentAPI } = require('../../../utils/api');
+      const confirmResult = await PaymentAPI.confirmTestPayment(payment_no);
+
+      if (confirmResult.data && confirmResult.data.success) {
+        wx.showToast({
+          title: '支付成功',
+          icon: 'success',
+          duration: 1500
+        });
+        setTimeout(() => {
+          this.paymentSuccess();
+        }, 1500);
+      } else {
+        wx.showToast({
+          title: confirmResult.message || '支付确认失败',
+          icon: 'none'
+        });
+      }
+    } catch (err) {
+      wx.showToast({
+        title: err.message || '支付确认异常',
+        icon: 'none'
+      });
+    }
+  },
+
+  // 解析或生成 openid
+  resolveOpenId() {
+    return new Promise((resolve, reject) => {
+      const app = getApp();
+      if (app.globalData.openid) return resolve(app.globalData.openid);
+
+      const cached = wx.getStorageSync('openid');
+      if (cached) {
+        app.globalData.openid = cached;
+        return resolve(cached);
+      }
+
+      const isDev = /localhost|127\.0\.0\.1|:3000/.test(app.globalData.baseUrl || '');
+      if (isDev) {
+        const mock = `MOCK_OPENID_${Math.floor(Math.random() * 100000)}`;
+        wx.setStorageSync('openid', mock);
+        app.globalData.openid = mock;
+        return resolve(mock);
+      }
+
+      // 生产环境需后端支持 code2session
+      wx.login({
+        success: () => {
+          reject(new Error('无法获取openid，请配置后端code2session接口'));
+        },
+        fail: () => {
+          reject(new Error('微信登录失败，请重试'));
+        }
+      });
+    });
+  },
+
+  // 支付成功
+  paymentSuccess() {
+    wx.redirectTo({
+      url: `/pages/payment/result/result?orderId=${this.data.orderId}&status=success`
     });
   },
 
   // 确认金额（用户）
   confirmAmount() {
     const app = getApp();
-    
+
     wx.request({
       url: `${app.globalData.baseUrl}/orders/${this.data.orderId}/confirm-amount`,
       method: 'POST',

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>订单与权限改动预览说明</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; margin: 0; background: #f5f5f5; }
+    header { background: #0F9D58; color: #fff; padding: 16px 20px; }
+    .container { padding: 20px; }
+    .card { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 6px 20px rgba(0,0,0,0.06); }
+    .title { font-weight: 700; margin-bottom: 8px; }
+    .desc { color: #666; line-height: 1.6; }
+    .preview-box { border: 1px dashed #dfe6e9; padding: 12px; margin-top: 8px; border-radius: 10px; background: #fafafa; }
+    .nav-模拟 { height: 64px; background: #f5f5f5; color: #111; display: flex; align-items: center; padding: 0 12px; border-radius: 8px; box-shadow: inset 0 -1px 0 #eee; }
+    .back { width: 24px; height: 24px; margin-right: 8px; border-style: solid; border-width: 12px 12px 12px 0; border-color: transparent #111 transparent transparent; }
+    .btn { display: inline-block; padding: 8px 14px; border-radius: 999px; border: none; background: linear-gradient(90deg,#0F9D58,#81C784); color:#fff; font-weight:600; }
+    .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .list { max-height: 200px; overflow: auto; background: #fff; border: 1px solid #eee; border-radius: 8px; }
+    .item { padding: 10px 12px; border-bottom: 1px solid #f2f2f2; }
+  </style>
+  <script>
+    function toggle(id){ const el = document.getElementById(id); el.style.display = (el.style.display==='none'?'block':'none'); }
+  </script>
+</head>
+<body>
+  <header>
+    <div>订单与权限改动预览说明</div>
+    <small>此页仅用于本地说明与核对，不影响小程序运行</small>
+  </header>
+  <div class="container">
+    <div class="card">
+      <div class="title">1. 支付方式配置迁移到全局</div>
+      <div class="desc">已在 <code>miniprogram/app.js</code> 增加 <code>globalData.paymentMethod</code>，页面 <code>payment.js</code> 不再硬编码；开发环境自动走测试支付，生产走微信支付。</div>
+    </div>
+
+    <div class="card">
+      <div class="title">2. 创建订单页时间选择滚动修复</div>
+      <div class="desc">修复第二列时段的 WXML 结构为 <code>view + wx:for</code>，启用滚动，避免“显示不全且不能滑动”。</div>
+      <div class="preview-box cols">
+        <div>
+          <div class="title">日期列（示意）</div>
+          <div class="list">
+            <div class="item">今天 11月11日</div>
+            <div class="item">明天 11月12日</div>
+            <div class="item">后天 11月13日</div>
+            <div class="item">周四 11月14日</div>
+            <div class="item">周五 11月15日</div>
+            <div class="item">周六 11月16日</div>
+            <div class="item">周日 11月17日</div>
+          </div>
+        </div>
+        <div>
+          <div class="title">时段列（示意）</div>
+          <div class="list">
+            <div class="item">08:00-09:00</div>
+            <div class="item">09:00-10:00</div>
+            <div class="item">10:00-11:00</div>
+            <div class="item">11:00-12:00</div>
+            <div class="item">13:00-14:00</div>
+            <div class="item">14:00-15:00</div>
+            <div class="item">15:00-16:00</div>
+            <div class="item">16:00-17:00</div>
+            <div class="item">17:00-18:00</div>
+            <div class="item">19:00-20:00</div>
+            <div class="item">20:00-21:00</div>
+            <div class="item">21:00-22:00</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="title">3. 位置权限申请优化</div>
+      <div class="desc">移除 <code>app.onLaunch</code> 阶段的授权调用，定位只在需要时触发，避免进入登录前出现两个相同的权限弹窗。</div>
+    </div>
+
+    <div class="card">
+      <div class="title">4. 订单状态文案完善</div>
+      <div class="desc">扩展状态映射，新增 <code>pending_payment</code>（待支付预付款）、<code>pending_repair_payment</code>（待支付维修费）、<code>closed</code>（交易关闭），详情页不再显示“未知状态”。</div>
+    </div>
+
+    <div class="card">
+      <div class="title">5. 详情页顶部样式与返回统一</div>
+      <div class="desc">导航采用浅色背景并适配状态栏安全区；内容区高度固定为 44px；返回使用左向三角形图标；右侧保留原生胶囊按钮区域（占位避免遮挡）。返回点击统一跳转到“我的订单”Tab。</div>
+      <div class="preview-box">
+        <div class="nav-模拟">
+          <span class="back"></span>
+          <span style="flex:1;text-align:center">订单详情</span>
+          <span style="width:120px;text-align:right;opacity:.6">胶囊占位</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="title">6. 底部操作按钮显示逻辑</div>
+      <div class="desc">详情页根据订单状态与当前角色（用户/电工）计算 <code>canCancel</code>、<code>canAccept</code>、<code>canComplete</code>、<code>canConfirmAmount</code>、<code>canPay</code>、<code>canReview</code>，确保对应按钮可见。</div>
+    </div>
+
+    <div class="card">
+      <div class="title">说明</div>
+      <div class="desc">本页面仅用于本地预览与沟通说明，帮助在未运行小程序的情况下快速核对 UI 与交互方向；不参与小程序构建与发布。</div>
+    </div>
+  </div>
+</body>
+</html>

@@ -7,7 +7,7 @@
 
 
 page {
-  background-color: #f5f5f5;
+  background: linear-gradient(180deg, #0F9D58 0%, #A5D6A7 100%);
   font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, 'Segoe UI', Arial, Roboto, 'PingFang SC', 'miui', 'Hiragino Sans GB', 'Microsoft Yahei', sans-serif;
   font-size: 28rpx;
   line-height: 1.6;
@@ -21,16 +21,16 @@ page {
 
 .page-container {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: transparent;
 }
 
 /* 卡片样式 */
 .card {
   background-color: #fff;
-  border-radius: 12rpx;
+  border-radius: 16rpx;
   padding: 24rpx;
   margin-bottom: 20rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.08);
 }
 
 .card-title {
@@ -51,22 +51,23 @@ page {
   align-items: center;
   justify-content: center;
   padding: 20rpx 32rpx;
-  border-radius: 8rpx;
+  border-radius: 24rpx;
   font-size: 28rpx;
   font-weight: 500;
   text-align: center;
   border: none;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.08);
 }
 
 .btn-primary {
-  background-color: #1976d2;
-  color: #fff;
+  background: linear-gradient(90deg, #0F9D58 0%, #81C784 100%);
+  color: #ffffff;
 }
 
 .btn-primary:hover {
-  background-color: #1565c0;
+  filter: brightness(1.06);
 }
 
 .btn-secondary {
@@ -80,18 +81,18 @@ page {
 }
 
 .btn-success {
-  background-color: #4caf50;
-  color: #fff;
+  background: linear-gradient(90deg, #2E7D32 0%, #81C784 100%);
+  color: #ffffff;
 }
 
 .btn-warning {
-  background-color: #ff9800;
-  color: #fff;
+  background-color: #ffcc80;
+  color: #000;
 }
 
 .btn-danger {
-  background-color: #f44336;
-  color: #fff;
+  background-color: #ef9a9a;
+  color: #000;
 }
 
 .btn-small {
@@ -137,7 +138,7 @@ page {
 }
 
 .form-input:focus {
-  border-color: #1976d2;
+  border-color: #0F9D58;
   outline: none;
 }
 
@@ -212,24 +213,32 @@ page {
 }
 
 .status-accepted {
-  background-color: #e3f2fd;
-  color: #1976d2;
+  background-color: #e0f2f1;
+  color: #0F9D58;
 }
 
 .status-in_progress {
-  background-color: #e1f5fe;
-  color: #0277bd;
+  background-color: #e0f2f1;
+  color: #2E7D32;
 }
 
 .status-completed {
-  background-color: #e8f5e8;
-  color: #2e7d32;
+  background-color: #e8f5e9;
+  color: #2E7D32;
 }
 
 .status-cancelled {
   background-color: #ffebee;
   color: #d32f2f;
 }
+
+/* 展示层状态（派生） */
+.status-prepay_pending { background-color: #e0f2f1; color: #0F9D58; }
+.status-waiting_accept { background-color: #fff8e1; color: #f57c00; }
+.status-repair_pay_pending { background-color: #e0f7fa; color: #0F9D58; }
+.status-pending_review { background-color: #fffde7; color: #f57f17; }
+.status-closed { background-color: #ffebee; color: #d32f2f; }
+.status-cancel_pending { background-color: #ffebee; color: #d32f2f; }
 
 /* 工具类 */
 .text-center {
@@ -245,7 +254,13 @@ page {
 }
 
 .text-primary {
-  color: #1976d2;
+  color: #0F9D58;
+}
+
+/* 毛玻璃效果容器（用于自定义底部栏或浮层）*/
+.glass {
+  background-color: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(8px);
 }
 
 .text-success {

@@ -205,10 +205,86 @@ const getOrderStatusText = (status) => {
     'completed': '已完成',
     'paid': '已支付',
     'cancelled': '已取消',
-    'cancel_pending': '取消中'
+    'cancel_pending': '取消处理中',
+    'pending_payment': '待支付预付款',
+    'pending_repair_payment': '待支付维修费',
+    'closed': '交易关闭'
   };
   return statusMap[status] || '未知状态';
 };
+
+/**
+ * 展示层状态映射（基于订单对象综合判断）
+ * 不改变数据库枚举，只返回展示用文案与代码
+ */
+const mapOrderToDisplayStatus = (order) => {
+  if (!order || typeof order !== 'object') {
+    return { code: 'unknown', text: '未知状态' };
+  }
+  const st = order.status;
+  const hasPaidPrepay = !!order.prepaid_at || !!order.has_paid_prepay;
+  const hasPaidRepair = !!order.has_paid_repair;
+  const hasReview = !!order.has_review;
+  const electricianId = order.electrician_id || order.electricianId || null;
+  const finalAmount = order.final_amount ?? order.amount ?? null;
+  const repairContent = order.repair_content ?? order.completion_note ?? null;
+
+  // 交易关闭类
+  if (st === 'cancelled' || st === 'closed') {
+    return { code: 'closed', text: '交易关闭' };
+  }
+  if (st === 'cancel_pending') {
+    return { code: 'cancel_pending', text: '交易关闭（取消处理中）' };
+  }
+
+  // 待支付预付款
+  if (st === 'pending_payment' || (st === 'pending' && !hasPaidPrepay)) {
+    return { code: 'prepay_pending', text: '待支付预付款' };
+  }
+
+  // 待接单（已支付预付款，且未分配电工）
+  if (st === 'pending' && hasPaidPrepay && !electricianId) {
+    return { code: 'waiting_accept', text: '待接单' };
+  }
+
+  // 已接单（如电工已提交金额/维修内容但未支付维修费，则显示“待支付维修费”）
+  if (st === 'accepted') {
+    const needRepairPay = ((finalAmount && Number(finalAmount) > 0) || !!repairContent) && !hasPaidRepair;
+    if (needRepairPay) {
+      return { code: 'repair_pay_pending', text: '待支付维修费' };
+    }
+    return { code: 'accepted', text: '已接单' };
+  }
+
+  // 待支付维修费阶段
+  if (st === 'pending_repair_payment') {
+    if (!hasPaidRepair) {
+      return { code: 'repair_pay_pending', text: '待支付维修费' };
+    }
+    // 用户已支付维修费，但状态尚未切到 in_progress，由电工通过“开始维修”接口进行转换
+    return { code: 'in_progress', text: '维修中' };
+  }
+
+  // 维修中
+  if (st === 'in_progress') {
+    return { code: 'in_progress', text: '维修中' };
+  }
+
+  // 已完成/待评价
+  if (st === 'completed') {
+    if (hasReview) {
+      return { code: 'completed', text: '已完成' };
+    }
+    return { code: 'pending_review', text: '待评价' };
+  }
+
+  return { code: 'unknown', text: getOrderStatusText(st) };
+};
+
+/**
+ * 仅返回展示层状态文案
+ */
+const getDisplayStatusText = (order) => mapOrderToDisplayStatus(order).text;
 
 /**
  * 获取支付状态文本
@@ -409,6 +485,8 @@ module.exports = {
   formatFileSize,
   generateRandomString,
   getOrderStatusText,
+  mapOrderToDisplayStatus,
+  getDisplayStatusText,
   getPaymentStatusText,
   getUserRoleText,
   chooseImage,
