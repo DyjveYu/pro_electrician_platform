@@ -226,5 +226,5 @@
 }
 
 .tip-item:last-child {
-  margin-bottom;
+  margin-bottom:0;
 }

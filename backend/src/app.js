@@ -27,6 +27,8 @@ const { initPaymentTimeoutJob } = require('./services/paymentTimeoutJob');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// 如果你部署在阿里云SLB、Nginx等后面，设置为true
+app.set('trust proxy', true);
 // 基础中间件
 app.use(helmet()); // 安全头
 app.use(cors()); // 跨域

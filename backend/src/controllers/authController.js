@@ -8,8 +8,50 @@ const { User, ElectricianCertification, Order } = require('../models');
 const AppError = require('../utils/AppError');
 const SmsService = require('../utils/smsService');
 const { redisOperations } = require('../config/redis');
+const axios = require('axios');
 
 class AuthController {
+  /**
+   * 微信小程序 code2session
+   * 用 code 换取 openid 和 session_key
+   */
+  static async code2Session(req, res, next) {
+    try {
+      const { code } = req.body;
+      if (!code) {
+        return res.error('Code不能为空', 400);
+      }
+
+      const appId = process.env.WECHAT_APP_ID;
+      const appSecret = process.env.WECHAT_APP_SECRET;
+
+      if (!appId || !appSecret) {
+        console.error('未配置小程序 AppID 或 Secret');
+        return res.error('服务器配置错误', 500);
+      }
+
+      // 调用微信接口
+      const url = `https://api.weixin.qq.com/sns/jscode2session?appid=${appId}&secret=${appSecret}&js_code=${code}&grant_type=authorization_code`;
+      
+      const response = await axios.get(url);
+      const { errcode, errmsg, openid, session_key } = response.data;
+
+      if (errcode && errcode !== 0) {
+        console.error('微信 code2session 失败:', response.data);
+        return res.error(`获取OpenID失败: ${errmsg}`, 400);
+      }
+
+      // 返回 openid 给前端
+      res.success({
+        openid
+      });
+
+    } catch (error) {
+      console.error('code2Session 接口异常:', error);
+      next(error);
+    }
+  }
+
   /**
    * 发送验证码
    */

@@ -49,7 +49,16 @@ const Payment = sequelize.define('Payment', {
     allowNull: true,
     comment: '微信交易号'
   },
-  
+  prepay_id: {
+    type: DataTypes.STRING(64),
+    allowNull: true,
+    comment: '微信预支付ID（prepay_id）'
+  },
+  expires_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: '支付过期时间'
+  },
   out_trade_no: {
     type: DataTypes.STRING(32),
     allowNull: false,

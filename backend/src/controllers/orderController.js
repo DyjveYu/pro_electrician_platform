@@ -96,11 +96,19 @@ class OrderController {
           return created;
         });
 
-        return res.success({
-          message: '工单创建成功',
+        console.log('创建订单成功，order:', order);
+        console.log('order.id:', order.id);
+        console.log('order.order_no:', order.order_no);
+
+        const responseData = {
           id: order.id,
           order_no: order.order_no
-        });
+        };
+
+        console.log('准备返回的数据:', responseData);
+        console.log('数据类型检查 - id:', typeof order.id, 'order_no:', typeof order.order_no);
+
+        return res.success(responseData, '工单创建成功');
       } catch (error) {
         next(error);
       }
@@ -973,9 +981,10 @@ class OrderController {
         return res.error('您不是该工单的负责电工', 403);
       }
 
-      // 验证工单状态
-      if (order.status !== 'in_progress' && order.status !== 'accepted') {
-        return res.error('只有已接单状态的工单可以修改', 400);
+      // 验证工单状态：允许已接单、待支付维修费、维修中
+      const allowedStatuses = ['accepted', 'pending_repair_payment', 'in_progress'];
+      if (!allowedStatuses.includes(order.status)) {
+        return res.error('只有已接单或待支付维修费状态的工单可以修改', 400);
       }
 
       // 开始事务

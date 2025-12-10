@@ -208,6 +208,7 @@ const getOrderStatusText = (status) => {
     'cancel_pending': '取消处理中',
     'pending_payment': '待支付预付款',
     'pending_repair_payment': '待支付维修费',
+    'pending_review': '待评价',
     'closed': '交易关闭'
   };
   return statusMap[status] || '未知状态';

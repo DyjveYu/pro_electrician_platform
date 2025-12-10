@@ -99,8 +99,11 @@ Page({
               ...this.computeActionFlags(o)
             };
           });
+          const getUpdatedAt = item => item.updated_at || item.updatedAt || item.updateTime || item.updated_at || item.createTime || item.created_at || 0;
+          const merged = (this.data.page === 1 ? normalizedOrders : this.data.orders.concat(normalizedOrders))
+            .sort((a, b) => new Date(getUpdatedAt(b)).getTime() - new Date(getUpdatedAt(a)).getTime());
           this.setData({
-            orders: this.data.page === 1 ? normalizedOrders : this.data.orders.concat(normalizedOrders),
+            orders: merged,
             hasMore: normalizedOrders.length === this.data.pageSize
           });
         } else {

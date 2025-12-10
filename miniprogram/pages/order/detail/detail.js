@@ -1,4 +1,5 @@
 // pages/order/detail/detail.js
+const MAX_FINAL_AMOUNT = 99999999.99; // 数据库 decimal(10,2) 最大支持 8 位整数 + 2 小数
 const { getOrderStatusText } = require('../../../utils/util');
 Page({
   data: {
@@ -12,12 +13,15 @@ Page({
     finalAmount: '',
     completing: false,
     // 支付相关
-    paying: false
-    ,
+    paying: false,
+    currentRole: 'user',
     // 已接单，电工修改
     updateAmount: '',
     updateContent: '',
-    updating: false
+    updating: false,
+    rating: 5,
+    reviewComment: '',
+    reviewing: false
   },
 
   onLoad(options) {
@@ -84,8 +88,23 @@ Page({
             30;
           const repairAmount = raw.final_amount ?? raw.repair_amount ?? raw.amount ?? raw.estimated_amount ?? '';
           const prefillUpdateAmount = repairAmount;
+          const rawElectrician = raw.electrician || {};
+          const normalizedElectrician = rawElectrician && typeof rawElectrician === 'object'
+            ? {
+              ...rawElectrician,
+              name: rawElectrician.name || rawElectrician.nickname || rawElectrician.nickName || ''
+            }
+            : null;
+          const normalizedReview = raw.review && typeof raw.review === 'object'
+            ? {
+              rating: raw.review.rating,
+              content: raw.review.content || ''
+            }
+            : null;
           const order = {
             ...raw,
+            review: normalizedReview,
+            electrician: normalizedElectrician,
             // 字段名映射，兼容后端字段
             orderNumber: raw.orderNumber || raw.order_no,
             createTime: raw.createTime || raw.created_at,
@@ -106,6 +125,7 @@ Page({
           const appRole = app.globalData.currentRole || 'user';
           const flags = this.computeActionFlags({ ...order, status: normalizedStatus }, appRole);
           this.setData({
+            currentRole: appRole,
             order: {
               ...order,
               status: normalizedStatus,
@@ -123,6 +143,12 @@ Page({
             this.setData({
               updateAmount: '',
               updateContent: ''
+            });
+          }
+          if (flags.canReview) {
+            this.setData({
+              rating: 5,
+              reviewComment: ''
             });
           }
 
@@ -151,12 +177,12 @@ Page({
     const st = order.status;
     const hasReview = !!(order.has_review || order.reviewed_at);
     // 基础权限
-    const canCancel = st === 'pending' || st === 'in_progress';
+    const canCancel = st === 'pending';
     const canAccept = role === 'electrician' && st === 'pending';
     const canComplete = role === 'electrician' && st === 'in_progress';
     const canConfirmAmount = role === 'user' && (st === 'pending_payment' || st === 'pending_repair_payment');
     const canPay = role === 'user' && (st === 'pending_payment' || st === 'pending_repair_payment');
-    const canReview = role === 'user' && st === 'completed' && !hasReview;
+    const canReview = role === 'user' && st === 'pending_review';
     const canSubmitCompletedUpdate = role === 'electrician' && (st === 'accepted' || st === 'pending_repair_payment');
     const canPayRepairFee = role === 'user' && st === 'pending_repair_payment';
     return { canCancel, canAccept, canComplete, canConfirmAmount, canPay, canReview, canSubmitCompletedUpdate, canPayRepairFee };
@@ -286,6 +312,19 @@ Page({
     });
   },
 
+  onReviewCommentInput(e) {
+    this.setData({
+      reviewComment: e.detail.value
+    });
+  },
+
+  setRating(e) {
+    const value = Number(e.currentTarget.dataset.value) || 1;
+    this.setData({
+      rating: value
+    });
+  },
+
   // 选择维修图片
   chooseWorkImage() {
     const that = this;
@@ -394,21 +433,65 @@ Page({
       wx.showToast({ title: '请输入维修内容', icon: 'none' });
       return false;
     }
-    if (!this.data.updateAmount || parseFloat(this.data.updateAmount) <= 0) {
+    const amountValue = parseFloat(this.data.updateAmount);
+    if (!this.data.updateAmount || amountValue <= 0) {
       wx.showToast({ title: '请输入正确的金额', icon: 'none' });
+      return false;
+    }
+    if (amountValue > MAX_FINAL_AMOUNT) {
+      wx.showToast({ title: `金额不能超过${MAX_FINAL_AMOUNT}`, icon: 'none' });
       return false;
     }
     return true;
   },
 
+  async submitReview() {
+    if (this.data.reviewing) return;
+    if (!this.data.rating || this.data.rating < 1 || this.data.rating > 5) {
+      wx.showToast({ title: '请选择评分', icon: 'none' });
+      return;
+    }
+
+    this.setData({ reviewing: true });
+    const app = getApp();
+    wx.request({
+      url: `${app.globalData.baseUrl}/orders/${this.data.orderId}/review`,
+      method: 'PUT',
+      header: {
+        'Authorization': `Bearer ${app.globalData.token}`
+      },
+      data: {
+        rating: this.data.rating,
+        comment: this.data.reviewComment
+      },
+      success: (res) => {
+        this.setData({ reviewing: false });
+        const ok = res?.data?.code === 0 || res?.data?.success === true || res.statusCode === 200;
+        if (ok) {
+          wx.showToast({ title: '评价成功', icon: 'success' });
+          this.loadOrderDetail();
+        } else {
+          wx.showToast({ title: res?.data?.message || '提交失败', icon: 'none' });
+        }
+      },
+      fail: () => {
+        this.setData({ reviewing: false });
+        wx.showToast({ title: '网络错误，请重试', icon: 'none' });
+      }
+    });
+  },
+
   // 验证完成订单表单
   validateCompleteForm() {
-    if (!this.data.workContent.trim()) {
-      wx.showToast({ title: '请输入维修内容', icon: 'none' });
+    // 电工视角：允许使用后台已经保存的维修内容/金额，不强制再次填写
+    const hasContent = this.data.workContent.trim() || (this.data.order && this.data.order.workContent);
+    const amountValue = parseFloat(this.data.finalAmount) || parseFloat(this.data.order?.final_amount) || parseFloat(this.data.order?.repairAmount);
+    if (!amountValue || amountValue <= 0) {
+      wx.showToast({ title: '请输入正确的金额', icon: 'none' });
       return false;
     }
-    if (!this.data.finalAmount || parseFloat(this.data.finalAmount) <= 0) {
-      wx.showToast({ title: '请输入正确的金额', icon: 'none' });
+    if (amountValue > MAX_FINAL_AMOUNT) {
+      wx.showToast({ title: `金额不能超过${MAX_FINAL_AMOUNT}`, icon: 'none' });
       return false;
     }
     return true;
@@ -431,7 +514,16 @@ Page({
       const app = getApp();
       const isDev = /localhost|127\.0\.0\.1|:3000/.test(app.globalData.baseUrl || '');
       const method = app.globalData.paymentMethod || (isDev ? 'test' : 'wechat');
+      
+      console.log('[详情页-支付] 开始支付流程');
+      console.log('[详情页-支付] isDev:', isDev);
+      console.log('[详情页-支付] baseUrl:', app.globalData.baseUrl);
+      console.log('[详情页-支付] paymentMethod 配置:', app.globalData.paymentMethod);
+      console.log('[详情页-支付] 最终使用的 method:', method);
+      console.log('[详情页-支付] 支付类型 type:', type);
+      
       const openid = method === 'wechat' ? await this.resolveOpenId() : undefined;
+      console.log('[详情页-支付] OpenID:', openid);
 
       const { PaymentAPI } = require('../../../utils/api');
       const result = await PaymentAPI.createPayment({
@@ -441,24 +533,35 @@ Page({
         openid
       });
 
+      console.log('[详情页-支付] 后端返回结果:', result);
+
       this.setData({ paying: false });
 
       const payload = result.data || result;
+      console.log('[详情页-支付] 解析后的 payload:', payload);
+      
       if (payload && (payload.success || payload.pay_params)) {
         const payParams = payload.pay_params || payload;
+        console.log('[详情页-支付] 支付参数:', payParams);
+        console.log('[详情页-支付] 判断：method =', method);
+        
         if (method === 'wechat') {
+          console.log('[详情页-支付] 调用 processPayment 拉起微信支付');
           this.processPayment(payParams);
         } else {
+          console.log('[详情页-支付] 测试支付，直接标记成功');
           this.processTestPayment(payload.payment_no);
           this.paymentSuccess();
         }
       } else {
+        console.error('[详情页-支付] 支付创建失败:', result);
         wx.showToast({
           title: result.message || '支付创建失败',
           icon: 'none'
         });
       }
     } catch (err) {
+      console.error('[详情页-支付] 支付异常:', err);
       this.setData({ paying: false });
       wx.showToast({
         title: err.message || '支付异常',
@@ -469,6 +572,14 @@ Page({
 
   // 拉起微信支付
   processPayment(payParams) {
+    console.log('[详情页-支付] processPayment 被调用');
+    console.log('[详情页-支付] 支付参数详情:', payParams);
+    console.log('[详情页-支付] timeStamp:', payParams.timeStamp);
+    console.log('[详情页-支付] nonceStr:', payParams.nonceStr);
+    console.log('[详情页-支付] package:', payParams.package);
+    console.log('[详情页-支付] signType:', payParams.signType);
+    console.log('[详情页-支付] paySign:', payParams.paySign);
+    
     wx.requestPayment({
       timeStamp: String(payParams.timeStamp),
       nonceStr: payParams.nonceStr,
@@ -476,9 +587,11 @@ Page({
       signType: payParams.signType || 'RSA',
       paySign: payParams.paySign,
       success: () => {
+        console.log('[详情页-支付] wx.requestPayment 成功');
         this.paymentSuccess();
       },
-      fail: () => {
+      fail: (err) => {
+        console.error('[详情页-支付] wx.requestPayment 失败:', err);
         wx.showToast({
           title: '支付失败，请重新发起支付',
           icon: 'none'
@@ -522,29 +635,73 @@ Page({
   resolveOpenId() {
     return new Promise((resolve, reject) => {
       const app = getApp();
-      if (app.globalData.openid) return resolve(app.globalData.openid);
+      console.log('[详情页] 开始获取 OpenID');
+      
+      // 1. 优先使用全局缓存
+      if (app.globalData.openid) {
+        console.log('[详情页] 使用全局缓存的 OpenID:', app.globalData.openid);
+        return resolve(app.globalData.openid);
+      }
 
+      // 2. 尝试从本地存储读取
       const cached = wx.getStorageSync('openid');
       if (cached) {
+        console.log('[详情页] 使用本地存储的 OpenID:', cached);
         app.globalData.openid = cached;
         return resolve(cached);
       }
 
+      // 3. 开发环境 Mock 逻辑
       const isDev = /localhost|127\.0\.0\.1|:3000/.test(app.globalData.baseUrl || '');
-      if (isDev) {
+      console.log('[详情页] isDev:', isDev, 'baseUrl:', app.globalData.baseUrl);
+      
+      if (isDev && !app.globalData.useRealOpenId) { 
         const mock = `MOCK_OPENID_${Math.floor(Math.random() * 100000)}`;
+        console.log('[详情页] 使用 Mock OpenID:', mock);
         wx.setStorageSync('openid', mock);
         app.globalData.openid = mock;
         return resolve(mock);
       }
 
-      // 生产环境需后端支持 code2session
+      // 4. 调用 wx.login + 后端 code2session
+      console.log('[详情页] 调用 wx.login 获取真实 OpenID');
       wx.login({
-        success: () => {
-          reject(new Error('无法获取openid，请配置后端code2session接口'));
+        success: (res) => {
+          if (res.code) {
+            console.log('[详情页] wx.login 成功，code:', res.code);
+            // 调用后端接口
+            wx.request({
+              url: `${app.globalData.baseUrl}/auth/code2session`,
+              method: 'POST',
+              data: { code: res.code },
+              success: (apiRes) => {
+                console.log('[详情页] code2session 后端响应:', apiRes.data);
+                // 兼容后端返回 code 为 0 或 200
+                if (apiRes.data.code === 0 || apiRes.data.code === 200 || apiRes.data.success) {
+                  const openid = apiRes.data.data.openid;
+                  console.log('[详情页] 获取到 OpenID:', openid);
+                  // 缓存 OpenID
+                  app.globalData.openid = openid;
+                  wx.setStorageSync('openid', openid);
+                  resolve(openid);
+                } else {
+                  console.error('[详情页] 获取 OpenID 失败，后端返回:', apiRes.data);
+                  reject(new Error(apiRes.data.message || '获取OpenID失败'));
+                }
+              },
+              fail: (err) => {
+                console.error('[详情页] 请求后端失败:', err);
+                reject(new Error('请求后端获取OpenID失败'));
+              }
+            });
+          } else {
+            console.error('[详情页] wx.login 未返回 code:', res);
+            reject(new Error('微信登录失败: ' + res.errMsg));
+          }
         },
-        fail: () => {
-          reject(new Error('微信登录失败，请重试'));
+        fail: (err) => {
+          console.error('[详情页] wx.login 调用失败:', err);
+          reject(new Error('wx.login 接口调用失败'));
         }
       });
     });

@@ -109,6 +109,16 @@ Message.belongsTo(User, {
   as: 'user'
 });
 
+// 10. Order - Message: 订单相关消息
+Order.hasMany(Message, {
+  foreignKey: 'related_id',
+  as: 'notifications'
+});
+Message.belongsTo(Order, {
+  foreignKey: 'related_id',
+  as: 'order'
+});
+
 // 10. SystemMessage - User (通过 UserMessageRead)
 const UserMessageRead = require('./UserMessageRead');
 

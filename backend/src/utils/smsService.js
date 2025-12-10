@@ -26,7 +26,7 @@ class SmsService {
 
       // 生成6位验证码
       const code = this.generateCode();
-      
+      console.log('Current NODE_ENV:', process.env.NODE_ENV);
       // 在测试环境使用固定验证码
       const isTestEnv = process.env.NODE_ENV !== 'production';
       const finalCode = isTestEnv ? '123456' : code;
@@ -173,8 +173,14 @@ class SmsService {
   static async getCodeTTL(phone, type = 'login') {
     try {
       const codeKey = `sms:code:${phone}:${type}`;
-      const ttl = await redis.ttl(codeKey);
-      return ttl > 0 ? ttl : 0;
+      const storedData = memoryStore.get(codeKey);
+      
+      if (!storedData || storedData.expiry < Date.now()) {
+        return 0;
+      }
+      
+      // 返回剩余秒数
+      return Math.floor((storedData.expiry - Date.now()) / 1000);
     } catch (error) {
       console.error('获取验证码TTL失败:', error);
       return 0;

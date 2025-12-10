@@ -20,6 +20,12 @@ router.post(
   AuthController.sendCode
 );
 
+// 微信小程序 code2session
+router.post('/code2session',
+  rateLimiter(),
+  AuthController.code2Session
+);
+
 // 用户登录/注册 - 限流：每分钟最多10次
 router.post('/login',
   rateLimiter(),

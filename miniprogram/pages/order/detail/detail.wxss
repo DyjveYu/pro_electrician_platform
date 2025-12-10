@@ -22,6 +22,7 @@
   padding: 40rpx 30rpx;
   display: flex;
   align-items: center;
+  justify-content: space-between;
 }
 
 .status-icon {
@@ -66,6 +67,24 @@
 .status-desc {
   font-size: 26rpx;
   color: #666;
+}
+
+.status-electrician {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 24rpx;
+  color: #666;
+}
+.status-electrician-label {
+  font-size: 24rpx;
+  color: #333;
+  font-weight: 600;
+  margin-bottom: 6rpx;
+}
+.status-electrician-name {
+  font-size: 26rpx;
+  color: #111;
 }
 
 /* 通用section */
@@ -253,6 +272,7 @@
   font-size: 28rpx;
   line-height: 1.5;
   background-color: #fafafa;
+  box-sizing: border-box; /* 关键：让padding和border包含在宽度内 */
 }
 
 .work-images {
@@ -410,18 +430,19 @@
 
 /* 客服按钮 */
 .service-btn {
-  width: 120rpx;
-  height: 88rpx;
-  background-color: #fff;
-  border: 1rpx solid #e5e5e5;
-  border-radius: 44rpx;
+  min-width: 120rpx;
+  height: 64rpx;
+  border-radius: 32rpx;
+  font-size: 26rpx;
+  border: none; /* 去掉真实边框 */
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 0;
-  font-size: 22rpx;
-  color: #666;
+  padding: 0 24rpx;
+  margin-left: auto;
+  margin-right: 32rpx;
+  background: transparent;
+  box-shadow: 0 0 0 1rpx #e0e0e0; /* 用阴影模拟边框 */
 }
 
 .service-btn::after {
@@ -439,6 +460,111 @@
   color: #666;
 }
 
+.electrician-bottom-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  font-size: 24rpx;
+  color: #333;
+  margin-left: 16rpx;
+}
+.electrician-label {
+  font-size: 24rpx;
+  color: #666;
+}
+.electrician-name {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.review-section .section-title {
+  margin-bottom: 20rpx;
+}
+
+.rating-stars {
+  display: flex;
+  gap: 12rpx;
+  margin-bottom: 20rpx;
+}
+
+.star {
+  font-size: 55rpx;
+  color: #ccc;
+}
+
+.star.active {
+  color: #ffb400;
+}
+
+.review-input {
+  width: 100%;
+  min-height: 160rpx;
+  border: 2rpx solid #e0e0e0;
+  border-radius: 12rpx;
+  padding: 20rpx;
+  font-size: 28rpx;
+  color: #333;
+  box-sizing: border-box;
+  background-color: #fff;
+}
+
+.review-display {
+  padding: 20rpx;
+  background-color: #fafafa;
+  border-radius: 12rpx;
+  margin-top: 24rpx;
+}
+
+.review-label {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 600;
+  margin-bottom: 10rpx;
+}
+
+.rating-stars.display-only .star {
+  cursor: default;
+}
+
+.review-text {
+  margin-top: 12rpx;
+  font-size: 26rpx;
+  color: #333;
+  line-height: 1.6;
+}
+
+.electrician-section {
+  margin-top: 20rpx;
+}
+
+.electrician-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.electrician-contact-btn {
+  min-width: 160rpx;
+  height: 64rpx;
+  border-radius: 32rpx;
+  font-size: 26rpx;
+  border: none; /* 去掉真实边框 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24rpx;
+  margin-left: auto;
+  margin-right: 32rpx;
+  background: transparent;
+  box-shadow: 0 0 0 1rpx #e0e0e0; /* 用阴影模拟边框 */
+}
+.electrician-contact-text {
+  white-space: nowrap;
+  font-size: 22rpx;
+  color: #666;
+}
 /* 操作按钮区域 */
 .action-area {
   flex: 1;
@@ -453,15 +579,17 @@
 /* 主要操作按钮 */
 .main-action-btn {
   min-width: 180rpx;
-  height: 88rpx;
+  height: 64rpx;
   border-radius: 44rpx;
   font-size: 32rpx;
-  font-weight: 600;
+  font-weight: 400;
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0 30rpx;
+  margin-left: auto; /* 添加这个 */
+  margin-right: 32rpx; /* 右侧留出空隙 */
 }
 
 .main-action-btn::after {

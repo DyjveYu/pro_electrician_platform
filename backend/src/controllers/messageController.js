@@ -1,8 +1,35 @@
-const { SystemMessage, UserMessageRead, User, Sequelize } = require('../models');
+const {
+  SystemMessage,
+  UserMessageRead,
+  User,
+  Message,
+  Order,
+  Sequelize
+} = require('../models');
 const { Op } = Sequelize;
 const AppError = require('../utils/AppError');
 
 class MessageController {
+  static buildSystemMessagePayload(messageObj, isRead) {
+    return {
+      ...messageObj,
+      createTime: messageObj.created_at,
+      is_read: isRead ? 1 : 0
+    };
+  }
+
+  static buildOrderMessagePayload(messageObj) {
+    const orderInfo = messageObj.order || {};
+    return {
+      ...messageObj,
+      orderId: orderInfo.id || messageObj.related_id,
+      orderNumber: orderInfo.order_no,
+      orderStatus: orderInfo.status,
+      createTime: messageObj.created_at,
+      is_read: messageObj.is_read ? 1 : 0
+    };
+  }
+
   /**
    * 获取用户消息列表
    * @param {Object} req - 请求对象
@@ -13,36 +40,58 @@ class MessageController {
     try {
       const { page = 1, limit = 20, type = '' } = req.query;
       const userId = req.user.id;
-      
-      // 确保转换为数字类型
       const numPage = parseInt(page);
       const numLimit = parseInt(limit);
       const numOffset = (numPage - 1) * numLimit;
-      
-      // 构建查询条件
+      const normalizedType = (type || '').trim().toLowerCase();
+
+      if (normalizedType === 'order') {
+        const { count, rows } = await Message.findAndCountAll({
+          where: {
+            user_id: userId,
+            type: 'order'
+          },
+          include: [{
+            model: Order,
+            as: 'order',
+            attributes: ['id', 'order_no', 'status']
+          }],
+          order: [['created_at', 'DESC']],
+          limit: numLimit,
+          offset: numOffset
+        });
+
+        const messages = rows.map((message) => {
+          const plain = message.toJSON();
+          return MessageController.buildOrderMessagePayload(plain);
+        });
+
+        const totalPages = Math.ceil(count / numLimit);
+
+        return res.success({
+          messages,
+          pagination: {
+            page: numPage,
+            limit: numLimit,
+            total: count,
+            totalPages,
+            hasMore: numPage < totalPages
+          }
+        });
+      }
+
       const whereConditions = {
         status: 'published',
         [Op.or]: [
           { target_users: 'all' },
           { target_users: 'users' },
           { target_users: 'electricians' }
-        ]
+        ],
+        type: {
+          [Op.in]: ['system', 'maintenance', 'activity']
+        }
       };
 
-      // 根据消息类型筛选
-      if (type && type.trim() !== '') {
-        if (type === 'order') {
-          // 订单通知使用urgent类型
-          whereConditions.type = 'urgent';
-        } else if (type === 'system') {
-          // 系统通知包含system、maintenance、activity类型
-          whereConditions.type = {
-            [Op.in]: ['system', 'maintenance', 'activity']
-          };
-        }
-      }
-
-      // 使用Sequelize执行查询
       const { count, rows } = await SystemMessage.findAndCountAll({
         where: whereConditions,
         include: [{
@@ -63,11 +112,8 @@ class MessageController {
         subQuery: false
       });
 
-      // 处理消息列表，添加is_read属性
       const messages = await Promise.all(rows.map(async (message) => {
         const messageObj = message.toJSON();
-        
-        // 查询该消息是否已读
         const readRecord = await UserMessageRead.findOne({
           where: {
             user_id: userId,
@@ -75,11 +121,7 @@ class MessageController {
           },
           attributes: ['id']
         });
-        
-        return {
-          ...messageObj,
-          is_read: readRecord ? 1 : 0
-        };
+        return MessageController.buildSystemMessagePayload(messageObj, !!readRecord);
       }));
 
       const totalPages = Math.ceil(count / numLimit);
@@ -110,7 +152,22 @@ class MessageController {
       const { id } = req.params;
       const userId = req.user.id;
 
-      // 使用Sequelize查询
+      const orderMessage = await Message.findOne({
+        where: {
+          id,
+          user_id: userId
+        },
+        include: [{
+          model: Order,
+          as: 'order',
+          attributes: ['id', 'order_no', 'status']
+        }]
+      });
+
+      if (orderMessage) {
+        return res.success(MessageController.buildOrderMessagePayload(orderMessage.toJSON()));
+      }
+
       const messageData = await SystemMessage.findOne({
         where: {
           id,
@@ -139,7 +196,6 @@ class MessageController {
         throw new AppError('消息不存在', 404);
       }
 
-      // 查询该消息是否已读
       const readRecord = await UserMessageRead.findOne({
         where: {
           user_id: userId,
@@ -148,13 +204,7 @@ class MessageController {
         attributes: ['id']
       });
 
-      // 构建返回数据
-      const message = {
-        ...messageData.toJSON(),
-        is_read: readRecord ? 1 : 0
-      };
-
-      res.success(message);
+      res.success(MessageController.buildSystemMessagePayload(messageData.toJSON(), !!readRecord));
     } catch (error) {
       next(error);
     }
@@ -171,8 +221,23 @@ class MessageController {
       const { id } = req.params;
       const userId = req.user.id;
 
-      // 检查消息是否存在
-      const message = await SystemMessage.findOne({
+      const orderMessage = await Message.findOne({
+        where: {
+          id,
+          user_id: userId
+        }
+      });
+
+      if (orderMessage) {
+        if (!orderMessage.is_read) {
+          orderMessage.is_read = true;
+          orderMessage.read_at = new Date();
+          await orderMessage.save();
+        }
+        return res.success({ message: '消息已标记为已读' });
+      }
+
+      const systemMessage = await SystemMessage.findOne({
         where: {
           id,
           status: 'published',
@@ -184,12 +249,11 @@ class MessageController {
         }
       });
 
-      if (!message) {
+      if (!systemMessage) {
         throw new AppError('消息不存在', 404);
       }
 
-      // 检查是否已标记为已读
-      const [readRecord, created] = await UserMessageRead.findOrCreate({
+      await UserMessageRead.findOrCreate({
         where: {
           user_id: userId,
           message_id: id
@@ -215,32 +279,20 @@ class MessageController {
     try {
       const userId = req.user.id;
 
-      // 获取用户已读消息ID列表
       const readMessageIds = await UserMessageRead.findAll({
         where: { user_id: userId },
         attributes: ['message_id'],
         raw: true
       }).then(reads => reads.map(read => read.message_id));
 
-      // 查询订单通知未读数量
-      const orderUnreadCount = await SystemMessage.count({
+      const orderUnreadCount = await Message.count({
         where: {
-          status: 'published',
-          type: 'urgent',
-          [Op.or]: [
-            { target_users: 'all' },
-            { target_users: 'users' },
-            { target_users: 'electricians' }
-          ],
-          ...(readMessageIds.length > 0 ? {
-            id: {
-              [Op.notIn]: readMessageIds
-            }
-          } : {})
+          user_id: userId,
+          type: 'order',
+          is_read: 0
         }
       });
 
-      // 查询系统通知未读数量
       const systemUnreadCount = await SystemMessage.count({
         where: {
           status: 'published',
@@ -261,10 +313,10 @@ class MessageController {
       });
 
       res.success({
-         orderUnreadCount,
-         systemUnreadCount,
-         totalUnreadCount: orderUnreadCount + systemUnreadCount
-        });
+        orderUnreadCount,
+        systemUnreadCount,
+        totalUnreadCount: orderUnreadCount + systemUnreadCount
+      });
     } catch (error) {
       next(error);
     }
